@@ -1,0 +1,102 @@
+[08/11/2018] 
+AS:
+ - [SQLJobs_Matrix] 
+	* Highlighting is added when you click on a column to see per-minute details.
+
+[06/11/2018]
+AS:
+ - [QuickOverview] 
+	* Backup and Restore stats has been added.
+	* DB snapshots are excluded from backup check query.
+ - [DBSummary]
+	* Shapshot column is added to the summary.
+	* Database is highlighted by orange color if it's a shapshot. Tooltip text shows source db name.
+ - [SQLJob_Details]
+	* Negative job durations are excluded from the scope.
+
+[05/11/2018]
+AS:
+ - [QuickOverview] 
+	* fixed issue with missing backup query
+ - [WhatsHappened]
+	* fixed issue with SQL Job execution history output (query worked not correct)
+
+[01/11/2018]
+AS:
+ - [SQLJobs_Matrix] 
+	* Added per minute execution history; 
+	* All 30-minutes columns are clickable and allow to see per minute breakdown;
+	* Coloring is more predictable now - same color for the same job.
+
+[31/10/2018]
+AS:
+ - [ServerCard] 
+	* All datasets were amended to avoid missing cmdlet issue (old version of PS). If there's missing info about OS, RAM, CPU, etc, check PS version.
+	* Version of Powershell on a target host is visible in the footer.
+ - [CMSFinder] Added parameter for CMS servername and datasource became dynamic, which makes report more universal.
+ - [WhoUsesServer] 
+	* added compatibility with SQL2008R2;
+	* minor visual enhancements.
+ - [SQLTraceDetails2] "Trace events captured" dataset has got 3 new columns - Happened Today, Depth of Data and Ago.
+
+[30/10/2018]
+AS:
+ - [QuickOverview] 
+	* Added section "Suspect and Repaired" with data from 2 dmvs and msdb..suspect_pages (repaired db pages).
+	* Fixed "Missing backups" query (excluded "SIMPLE + Log backups" cases).
+
+[29/10/2018]
+AS:
+ - [DBFiles] Minor visual enhancements.
+ - [QuickOverview] Source query for SQL Jobs summary table has been re-written to use job categories instead of names to group jobs. "Maintenance" is now all jobs which have "Database Maintenance" category specified. "Other" is the rest.
+ - [SQLJobs_Matrix] Added protection against negative run_duration(-s).
+
+[26/10/2018]
+AS:
+ - [CMSFinder] Report is now linked to ServerCard & QuickOverview reports. 
+ - [QuickOverview] DiskLatency now shows correct data in case of mount points.
+ - [ServerCard] 
+	* Fixed a query which gets sql files placement per drive (support for mount point).
+	* Minor visual enhancements.
+
+[25/10/2018]
+AS:
+ - [CMSFinder] New report which does a search in a CMS server. Output is a path to a SQL server in the CMS.
+
+[16/10/2018]
+AS:
+ - [DBFiles] Fixed issue with graphs showing incorrect data.
+ - [WhoUsesServer] New report which shows users, hosts, application ever connected to the SQL server and databases. Source of data is default trace + sys.dm_exec_sessions.
+ - [QuickOverview] Link is added to [WhoUsesServer] report.
+
+[15/10/2018]
+AS:
+ - [QuickOverview] 
+	* Added "Snapshots" column in "Databases" with conditional formatting.
+	* Fixed coloring bug for column "Free Space (GB)" in "DB Disks".
+	* Minor formatting changes.
+
+[10/10/2018]
+AS:
+ - [QuickOverview] Added "Resource Governor" indicator with tool tip text (Status, Classifier, Pools & Groups).
+
+[9/10/2018]
+AS:
+ - [QuickOverview] Fixed drawbacks with last backup query:
+	* check local backups made on local server (imported backup history is excluded);
+	* added verbal description of all backup types (before it was only for FULL and LOG);
+	* minor fix for the case when there were no local backups at all  OR msdb..backupset is empty.
+ - [DBFiles] Datasets were re-written to be compatible with mount points which also made report faster.
+
+[5/10/2018]
+AS:
+ - [QuickOverview] DB Disks table (query) is now compatible with mount points. Query has been re-written.
+
+[4/10/2018]
+AS:
+ - [QuickOverview] new check "online CPUs" has been added; if there are offline CPUs, appropriate field is highlighted by "orange" and pop-up message tells how many are offline.
+ - [QuickOverview] fixed issue with data format and sorting order in "Plans per hour/day" graph 
+
+[3/10/2018]
+AS:
+ - [QuickOverview] last backups data set was amended (query is fixed)  and now it correcty shows last backup info.

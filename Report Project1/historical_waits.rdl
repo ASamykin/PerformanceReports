@@ -1,0 +1,1754 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner">
+  <AutoRefresh>0</AutoRefresh>
+  <DataSources>
+    <DataSource Name="DataSource1">
+      <ConnectionProperties>
+        <DataProvider>SQL</DataProvider>
+        <ConnectString>="Data Source="+Parameters!SQLServer.Value</ConnectString>
+        <IntegratedSecurity>true</IntegratedSecurity>
+      </ConnectionProperties>
+      <rd:SecurityType>Integrated</rd:SecurityType>
+      <rd:DataSourceID>c6a86281-9793-4f3f-b2af-22ddcc57935b</rd:DataSourceID>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="CHECK_DEPENDENCIES">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <CommandText>/*
+if not exists (select * from msdb.sys.objects o
+			join msdb.sys.schemas s on o.schema_id = s.schema_id 
+		where o.name = N'fn_QueryTextFromHandle' and s.name = N'MS_PerfDashboard')
+begin
+	RAISERROR('The stored procedures and functions required by the performance dashboard have not yet been installed.  A database administrator must run the SETUP.SQL script (supplied with the reports) on each SQL Server instance that will be monitored via the dashboard reports.', 18, 1)
+end
+
+exec msdb.MS_PerfDashboard.usp_CheckDependencies
+*/
+
+select '' [major_version],'' [minor_version], '' [build_version]</CommandText>
+        <rd:UseGenericDesigner>true</rd:UseGenericDesigner>
+      </Query>
+      <Fields>
+        <Field Name="major_version">
+          <DataField>major_version</DataField>
+          <rd:TypeName>System.Byte</rd:TypeName>
+        </Field>
+        <Field Name="minor_version">
+          <DataField>minor_version</DataField>
+          <rd:TypeName>System.Byte</rd:TypeName>
+        </Field>
+        <Field Name="build_number">
+          <DataField>build_number</DataField>
+          <rd:TypeName>System.Int16</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="DM_OS_WAIT_STATS">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <CommandText>
+
+select 
+wait_type, 
+                case
+                        when wait_type like N'LCK_M_%' then N'Lock'
+                        when wait_type like N'LATCH_%' then N'Latch'
+                        when wait_type like N'PAGELATCH_%' then N'Buffer Latch'
+                        when wait_type like N'PAGEIOLATCH_%' then N'Buffer IO'
+                        when wait_type like N'RESOURCE_SEMAPHORE_%' then N'Compilation'
+                        when wait_type = N'SOS_SCHEDULER_YIELD' then N'Scheduler Yield'
+                        when wait_type in (N'LOGMGR', N'LOGBUFFER',
+N'LOGMGR_RESERVE_APPEND', N'LOGMGR_FLUSH', N'WRITELOG') then
+N'Logging'
+                        when wait_type in (N'ASYNC_NETWORK_IO', N'NET_WAITFOR_PACKET')
+then N'Network IO'
+                        when wait_type in (N'CXPACKET', N'EXCHANGE',N'CXROWSET_SYNC') then N'Parallelism'
+                        when wait_type in (N'RESOURCE_SEMAPHORE', N'CMEMTHREAD',
+N'SOS_RESERVEDMEMBLOCKLIST') then N'Memory'
+                        when wait_type like N'CLR_%' or wait_type like N'SQLCLR%' then
+N'CLR'
+                        when wait_type like N'DBMIRROR%' or wait_type =
+N'MIRROR_SEND_MESSAGE' then N'Mirroring'
+                        when (wait_type like N'%HADR%' or wait_type=N'REDO_THREAD_PENDING_WORK')  then N'AlwaysOn'
+                        when wait_type like N'XACT%' or wait_type like N'DTC_%' or
+wait_type like N'TRAN_MARKLATCH_%' or wait_type like N'MSQL_XACT_%'
+or wait_type = N'TRANSACTION_MUTEX' then N'Transaction'
+                        when wait_type like N'SLEEP_%' or wait_type in
+(N'LAZYWRITER_SLEEP', N'SQLTRACE_BUFFER_FLUSH', N'WAITFOR',
+N'WAIT_FOR_RESULTS') then N'Sleep'
+                        when wait_type in (N'PARALLEL_BACKUP_QUEUE', N'BACKUPBUFFER',
+N'BACKUPIO', N'BACKUPTHREAD') then
+N'Backup'
+                        else N'Other'
+                end as wait_category,
+waiting_tasks_count as num_waits, 
+wait_time_ms as wait_time,
+max_wait_time_ms
+from sys.dm_os_wait_stats
+where waiting_tasks_count &gt; 0</CommandText>
+        <rd:UseGenericDesigner>true</rd:UseGenericDesigner>
+      </Query>
+      <Fields>
+        <Field Name="wait_type">
+          <DataField>wait_type</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="wait_category">
+          <DataField>wait_category</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="num_waits">
+          <DataField>num_waits</DataField>
+          <rd:TypeName>System.Int64</rd:TypeName>
+        </Field>
+        <Field Name="wait_time">
+          <DataField>wait_time</DataField>
+          <rd:TypeName>System.Int64</rd:TypeName>
+        </Field>
+        <Field Name="max_wait_time_ms">
+          <DataField>max_wait_time_ms</DataField>
+          <rd:TypeName>System.Int64</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+  </DataSets>
+  <ReportSections>
+    <ReportSection>
+      <Body>
+        <ReportItems>
+          <Rectangle Name="rectangle1">
+            <ReportItems>
+              <Tablix Name="table2">
+                <TablixBody>
+                  <TablixColumns>
+                    <TablixColumn>
+                      <Width>0.625in</Width>
+                    </TablixColumn>
+                    <TablixColumn>
+                      <Width>2.625in</Width>
+                    </TablixColumn>
+                    <TablixColumn>
+                      <Width>1.25in</Width>
+                    </TablixColumn>
+                    <TablixColumn>
+                      <Width>1.25in</Width>
+                    </TablixColumn>
+                    <TablixColumn>
+                      <Width>1.125in</Width>
+                    </TablixColumn>
+                    <TablixColumn>
+                      <Width>1.125in</Width>
+                    </TablixColumn>
+                    <TablixColumn>
+                      <Width>1.125in</Width>
+                    </TablixColumn>
+                  </TablixColumns>
+                  <TablixRows>
+                    <TablixRow>
+                      <Height>0.2in</Height>
+                      <TablixCells>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox30">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>Wait Category</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style />
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>textbox30</rd:DefaultName>
+                              <ZIndex>25</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                            <ColSpan>2</ColSpan>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell />
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox19">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>Number of Waits</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Left</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>textbox19</rd:DefaultName>
+                              <ZIndex>24</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox20">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>Wait Time (sec)</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>textbox20</rd:DefaultName>
+                              <ZIndex>23</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox13">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>% Wait Time</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Left</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>textbox13</rd:DefaultName>
+                              <ZIndex>22</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox11">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value />
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style />
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>textbox11</rd:DefaultName>
+                              <ZIndex>21</ZIndex>
+                              <Style>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox4">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value />
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style />
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>textbox4</rd:DefaultName>
+                              <ZIndex>20</ZIndex>
+                              <Style>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                      </TablixCells>
+                    </TablixRow>
+                    <TablixRow>
+                      <Height>0.2in</Height>
+                      <TablixCells>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="wait_category">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>=Fields!wait_category.Value</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style />
+                                </Paragraph>
+                              </Paragraphs>
+                              <ZIndex>19</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Color>Gainsboro</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                            <ColSpan>2</ColSpan>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell />
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="num_waits">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>=Sum(Fields!num_waits.Value)</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Right</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>num_waits</rd:DefaultName>
+                              <ZIndex>18</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Color>Gainsboro</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="wait_time">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>=Sum(Fields!wait_time.Value)/1000</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Right</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>wait_time</rd:DefaultName>
+                              <ZIndex>17</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Color>Gainsboro</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox8">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>=FormatPercent(Sum(Fields!wait_time.Value) / sum(Fields!wait_time.Value, "DM_OS_WAIT_STATS"), 2)</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Right</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>textbox8</rd:DefaultName>
+                              <ZIndex>16</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Color>Gainsboro</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox9">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value />
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style />
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>textbox9</rd:DefaultName>
+                              <ZIndex>15</ZIndex>
+                              <Style>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox12">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value />
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style />
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>textbox12</rd:DefaultName>
+                              <ZIndex>14</ZIndex>
+                              <Style>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                      </TablixCells>
+                    </TablixRow>
+                    <TablixRow>
+                      <Height>0.2in</Height>
+                      <TablixCells>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox5">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value />
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style />
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>textbox5</rd:DefaultName>
+                              <ZIndex>13</ZIndex>
+                              <Style>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox10">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>Wait Type</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style />
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>textbox10</rd:DefaultName>
+                              <ZIndex>12</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox6">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>Number of Waits</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Left</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>textbox6</rd:DefaultName>
+                              <ZIndex>11</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox7">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>Wait Time (sec)</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Left</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>textbox7</rd:DefaultName>
+                              <ZIndex>10</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox17">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>% Wait time</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Left</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <ZIndex>9</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox2">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>Max Wait Time (ms)</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style />
+                                </Paragraph>
+                              </Paragraphs>
+                              <ZIndex>8</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox32">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>Avg Wait Time (ms)</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style />
+                                </Paragraph>
+                              </Paragraphs>
+                              <ZIndex>7</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                      </TablixCells>
+                    </TablixRow>
+                    <TablixRow>
+                      <Height>0.2in</Height>
+                      <TablixCells>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox16">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value />
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style />
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>textbox16</rd:DefaultName>
+                              <ZIndex>6</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Color>Gainsboro</Color>
+                                </Border>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox21">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>=Fields!wait_type.Value</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style />
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>textbox21</rd:DefaultName>
+                              <ZIndex>5</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Color>Gainsboro</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox22">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>=Fields!num_waits.Value</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style />
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>textbox22</rd:DefaultName>
+                              <ZIndex>4</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Color>Gainsboro</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox23">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>=Fields!wait_time.Value/1000</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style />
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>textbox23</rd:DefaultName>
+                              <ZIndex>3</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Color>Gainsboro</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox34">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>=FormatPercent(IIf(sum(Fields!wait_time.Value, "table2_Group1") &gt; 0, Fields!wait_time.Value/sum(Fields!wait_time.Value, "table2_Group1"), 1), 2)</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style />
+                                </Paragraph>
+                              </Paragraphs>
+                              <ZIndex>2</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Color>Gainsboro</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox35">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>=Fields!max_wait_time_ms.Value</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style />
+                                </Paragraph>
+                              </Paragraphs>
+                              <ZIndex>1</ZIndex>
+                              <Style>
+                                <Border>
+                                  <Color>Gainsboro</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="textbox36">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>=FormatNumber(Fields!wait_time.Value/Fields!num_waits.Value, 1, true, false, false)</Value>
+                                      <Style>
+                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Right</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <Style>
+                                <Border>
+                                  <Color>Gainsboro</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                      </TablixCells>
+                    </TablixRow>
+                  </TablixRows>
+                </TablixBody>
+                <TablixColumnHierarchy>
+                  <TablixMembers>
+                    <TablixMember />
+                    <TablixMember />
+                    <TablixMember />
+                    <TablixMember />
+                    <TablixMember />
+                    <TablixMember />
+                    <TablixMember />
+                  </TablixMembers>
+                </TablixColumnHierarchy>
+                <TablixRowHierarchy>
+                  <TablixMembers>
+                    <TablixMember>
+                      <KeepWithGroup>After</KeepWithGroup>
+                      <KeepTogether>true</KeepTogether>
+                    </TablixMember>
+                    <TablixMember>
+                      <Group Name="table2_Group1">
+                        <GroupExpressions>
+                          <GroupExpression>=Fields!wait_category.Value</GroupExpression>
+                        </GroupExpressions>
+                      </Group>
+                      <SortExpressions>
+                        <SortExpression>
+                          <Value>=sum(Fields!wait_time.Value)</Value>
+                          <Direction>Descending</Direction>
+                        </SortExpression>
+                      </SortExpressions>
+                      <TablixMembers>
+                        <TablixMember>
+                          <KeepWithGroup>After</KeepWithGroup>
+                          <KeepTogether>true</KeepTogether>
+                        </TablixMember>
+                        <TablixMember>
+                          <Visibility>
+                            <Hidden>true</Hidden>
+                            <ToggleItem>wait_category</ToggleItem>
+                          </Visibility>
+                          <KeepWithGroup>After</KeepWithGroup>
+                          <KeepTogether>true</KeepTogether>
+                        </TablixMember>
+                        <TablixMember>
+                          <Group Name="table2_Details_Group">
+                            <DataElementName>Detail</DataElementName>
+                          </Group>
+                          <SortExpressions>
+                            <SortExpression>
+                              <Value>=Fields!wait_time.Value</Value>
+                              <Direction>Descending</Direction>
+                            </SortExpression>
+                          </SortExpressions>
+                          <TablixMembers>
+                            <TablixMember>
+                              <Visibility>
+                                <Hidden>true</Hidden>
+                                <ToggleItem>wait_category</ToggleItem>
+                              </Visibility>
+                            </TablixMember>
+                          </TablixMembers>
+                          <DataElementName>Detail_Collection</DataElementName>
+                          <DataElementOutput>Output</DataElementOutput>
+                          <KeepTogether>true</KeepTogether>
+                        </TablixMember>
+                      </TablixMembers>
+                    </TablixMember>
+                  </TablixMembers>
+                </TablixRowHierarchy>
+                <DataSetName>DM_OS_WAIT_STATS</DataSetName>
+                <Height>0.8in</Height>
+                <Width>9.125in</Width>
+                <Style>
+                  <FontFamily>Tahoma</FontFamily>
+                </Style>
+              </Tablix>
+              <Textbox Name="textbox18">
+                <CanGrow>true</CanGrow>
+                <KeepTogether>true</KeepTogether>
+                <Paragraphs>
+                  <Paragraph>
+                    <TextRuns>
+                      <TextRun>
+                        <Value>Waits in the Sleep category are typically delays incurred by background tasks waiting for more work.  A high wait time in this category is usually not indicative of any performance problem.</Value>
+                        <Style>
+                          <FontFamily>Tahoma</FontFamily>
+                          <FontSize>8pt</FontSize>
+                        </Style>
+                      </TextRun>
+                    </TextRuns>
+                    <Style />
+                  </Paragraph>
+                </Paragraphs>
+                <rd:DefaultName>textbox18</rd:DefaultName>
+                <Top>0.875in</Top>
+                <Height>0.375in</Height>
+                <Width>6.875in</Width>
+                <ZIndex>1</ZIndex>
+                <Style>
+                  <PaddingLeft>2pt</PaddingLeft>
+                  <PaddingRight>2pt</PaddingRight>
+                  <PaddingTop>2pt</PaddingTop>
+                  <PaddingBottom>2pt</PaddingBottom>
+                </Style>
+              </Textbox>
+            </ReportItems>
+            <DataElementOutput>ContentsOnly</DataElementOutput>
+            <Top>3.52778in</Top>
+            <Left>0.125in</Left>
+            <Height>1.25in</Height>
+            <Width>9.25in</Width>
+            <Style />
+          </Rectangle>
+          <Rectangle Name="rectangle2">
+            <ReportItems>
+              <Chart Name="chart4">
+                <ChartCategoryHierarchy>
+                  <ChartMembers>
+                    <ChartMember>
+                      <Group Name="chart4_CategoryGroup1">
+                        <GroupExpressions>
+                          <GroupExpression>=Fields!wait_category.Value</GroupExpression>
+                        </GroupExpressions>
+                      </Group>
+                      <SortExpressions>
+                        <SortExpression>
+                          <Value>=sum(Fields!wait_time.Value)</Value>
+                          <Direction>Descending</Direction>
+                        </SortExpression>
+                      </SortExpressions>
+                      <Label>=Fields!wait_category.Value</Label>
+                      <DataElementOutput>Output</DataElementOutput>
+                    </ChartMember>
+                  </ChartMembers>
+                </ChartCategoryHierarchy>
+                <ChartSeriesHierarchy>
+                  <ChartMembers>
+                    <ChartMember>
+                      <Label>wait time</Label>
+                    </ChartMember>
+                  </ChartMembers>
+                </ChartSeriesHierarchy>
+                <ChartData>
+                  <ChartSeriesCollection>
+                    <ChartSeries Name="Series1">
+                      <ChartDataPoints>
+                        <ChartDataPoint>
+                          <ChartDataPointValues>
+                            <Y>=Sum(Fields!wait_time.Value)/1000</Y>
+                          </ChartDataPointValues>
+                          <ChartDataLabel>
+                            <Style>
+                              <FontSize>8pt</FontSize>
+                            </Style>
+                            <Label>=sum(Fields!num_waits.Value) &amp; ChrW(13) &amp; ChrW(10) &amp; IIf(sum(Fields!num_waits.Value) = 1, "Wait", "Waits")</Label>
+                            <Rotation>-90</Rotation>
+                          </ChartDataLabel>
+                          <ToolTip>=sum(Fields!num_waits.Value) &amp; ChrW(13) &amp; ChrW(10) &amp; IIf(sum(Fields!num_waits.Value) = 1, "Wait", "Waits")</ToolTip>
+                          <Style>
+                            <Border>
+                              <Width>0.376pt</Width>
+                            </Border>
+                            <Color>SteelBlue</Color>
+                          </Style>
+                          <ChartMarker>
+                            <Size>6pt</Size>
+                            <Style />
+                          </ChartMarker>
+                        </ChartDataPoint>
+                      </ChartDataPoints>
+                      <Style />
+                      <ChartEmptyPoints>
+                        <Style />
+                        <ChartMarker>
+                          <Style />
+                        </ChartMarker>
+                        <ChartDataLabel>
+                          <Style />
+                        </ChartDataLabel>
+                      </ChartEmptyPoints>
+                      <CustomProperties>
+                        <CustomProperty>
+                          <Name>PointWidth</Name>
+                          <Value>0.6</Value>
+                        </CustomProperty>
+                      </CustomProperties>
+                      <ValueAxisName>Primary</ValueAxisName>
+                      <CategoryAxisName>Primary</CategoryAxisName>
+                      <ChartSmartLabel>
+                        <CalloutLineColor>Black</CalloutLineColor>
+                        <MinMovingDistance>0pt</MinMovingDistance>
+                      </ChartSmartLabel>
+                    </ChartSeries>
+                  </ChartSeriesCollection>
+                </ChartData>
+                <ChartAreas>
+                  <ChartArea Name="Default">
+                    <ChartCategoryAxes>
+                      <ChartAxis Name="Primary">
+                        <Style>
+                          <Border>
+                            <Style>None</Style>
+                            <Width>0.75pt</Width>
+                          </Border>
+                        </Style>
+                        <ChartAxisTitle>
+                          <Caption>Wait Category</Caption>
+                          <Style>
+                            <FontFamily>Tahoma</FontFamily>
+                            <FontWeight>Bold</FontWeight>
+                          </Style>
+                        </ChartAxisTitle>
+                        <Margin>False</Margin>
+                        <Interval>1</Interval>
+                        <ChartMajorGridLines>
+                          <Enabled>False</Enabled>
+                          <Style>
+                            <Border>
+                              <Style>Solid</Style>
+                              <Width>0.75pt</Width>
+                            </Border>
+                          </Style>
+                          <Interval>NaN</Interval>
+                        </ChartMajorGridLines>
+                        <ChartMinorGridLines>
+                          <Enabled>False</Enabled>
+                          <Style>
+                            <Border>
+                              <Style>Solid</Style>
+                              <Width>0.75pt</Width>
+                            </Border>
+                          </Style>
+                          <Interval>NaN</Interval>
+                          <IntervalOffset>-1</IntervalOffset>
+                        </ChartMinorGridLines>
+                        <ChartMajorTickMarks>
+                          <Enabled>True</Enabled>
+                          <Style>
+                            <Border>
+                              <Style>Solid</Style>
+                              <Width>0.75pt</Width>
+                            </Border>
+                          </Style>
+                          <Interval>NaN</Interval>
+                        </ChartMajorTickMarks>
+                        <ChartMinorTickMarks>
+                          <Type>None</Type>
+                        </ChartMinorTickMarks>
+                        <Minimum>NaN</Minimum>
+                        <Maximum>NaN</Maximum>
+                        <PreventFontShrink>true</PreventFontShrink>
+                        <PreventFontGrow>true</PreventFontGrow>
+                        <IncludeZero>false</IncludeZero>
+                        <ChartAxisScaleBreak>
+                          <Style />
+                        </ChartAxisScaleBreak>
+                      </ChartAxis>
+                      <ChartAxis Name="Secondary">
+                        <Style>
+                          <FontSize>8pt</FontSize>
+                        </Style>
+                        <ChartAxisTitle>
+                          <Caption />
+                          <Style>
+                            <FontSize>8pt</FontSize>
+                          </Style>
+                        </ChartAxisTitle>
+                        <CrossAt>NaN</CrossAt>
+                        <Location>Opposite</Location>
+                        <Minimum>NaN</Minimum>
+                        <Maximum>NaN</Maximum>
+                        <ChartAxisScaleBreak>
+                          <Style />
+                        </ChartAxisScaleBreak>
+                      </ChartAxis>
+                    </ChartCategoryAxes>
+                    <ChartValueAxes>
+                      <ChartAxis Name="Primary">
+                        <Style>
+                          <Border>
+                            <Style>None</Style>
+                            <Width>0.75pt</Width>
+                          </Border>
+                          <Format>n0</Format>
+                        </Style>
+                        <ChartAxisTitle>
+                          <Caption>Wait Time (sec)</Caption>
+                          <Style>
+                            <FontFamily>Tahoma</FontFamily>
+                            <FontWeight>Bold</FontWeight>
+                          </Style>
+                        </ChartAxisTitle>
+                        <Margin>True</Margin>
+                        <ChartMajorGridLines>
+                          <Enabled>True</Enabled>
+                          <Style>
+                            <Border>
+                              <Style>Solid</Style>
+                              <Width>0.75pt</Width>
+                            </Border>
+                          </Style>
+                          <Interval>NaN</Interval>
+                        </ChartMajorGridLines>
+                        <ChartMinorGridLines>
+                          <Enabled>False</Enabled>
+                          <Style>
+                            <Border>
+                              <Style>Solid</Style>
+                              <Width>0.75pt</Width>
+                            </Border>
+                          </Style>
+                          <Interval>NaN</Interval>
+                        </ChartMinorGridLines>
+                        <ChartMajorTickMarks>
+                          <Enabled>True</Enabled>
+                          <Style>
+                            <Border>
+                              <Style>Solid</Style>
+                              <Width>0.75pt</Width>
+                            </Border>
+                          </Style>
+                          <Interval>NaN</Interval>
+                        </ChartMajorTickMarks>
+                        <ChartMinorTickMarks>
+                          <Type>None</Type>
+                        </ChartMinorTickMarks>
+                        <Scalar>true</Scalar>
+                        <Minimum>0</Minimum>
+                        <PreventFontShrink>true</PreventFontShrink>
+                        <PreventFontGrow>true</PreventFontGrow>
+                        <IncludeZero>false</IncludeZero>
+                        <ChartAxisScaleBreak>
+                          <Style />
+                        </ChartAxisScaleBreak>
+                      </ChartAxis>
+                      <ChartAxis Name="Secondary">
+                        <Style>
+                          <FontSize>8pt</FontSize>
+                        </Style>
+                        <ChartAxisTitle>
+                          <Caption />
+                          <Style>
+                            <FontSize>8pt</FontSize>
+                          </Style>
+                        </ChartAxisTitle>
+                        <CrossAt>NaN</CrossAt>
+                        <Location>Opposite</Location>
+                        <Minimum>NaN</Minimum>
+                        <Maximum>NaN</Maximum>
+                        <ChartAxisScaleBreak>
+                          <Style />
+                        </ChartAxisScaleBreak>
+                      </ChartAxis>
+                    </ChartValueAxes>
+                    <ChartThreeDProperties>
+                      <ProjectionMode>Perspective</ProjectionMode>
+                      <Shading>Simple</Shading>
+                      <WallThickness>15</WallThickness>
+                      <Clustered>true</Clustered>
+                    </ChartThreeDProperties>
+                    <Style>
+                      <Border>
+                        <Style>Solid</Style>
+                        <Width>0.75pt</Width>
+                      </Border>
+                      <BackgroundColor>LightGrey</BackgroundColor>
+                    </Style>
+                  </ChartArea>
+                </ChartAreas>
+                <ChartTitles>
+                  <ChartTitle Name="Default">
+                    <Caption>Cumulative Wait Time By Wait Category</Caption>
+                    <Style>
+                      <FontFamily>Tahoma</FontFamily>
+                      <FontSize>12pt</FontSize>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </ChartTitle>
+                </ChartTitles>
+                <ChartBorderSkin>
+                  <Style>
+                    <BackgroundColor>Gray</BackgroundColor>
+                    <BackgroundGradientType>None</BackgroundGradientType>
+                    <Color>White</Color>
+                  </Style>
+                </ChartBorderSkin>
+                <ChartNoDataMessage Name="NoDataMessage">
+                  <Caption>No Data Available</Caption>
+                  <Style>
+                    <BackgroundGradientType>None</BackgroundGradientType>
+                    <TextAlign>General</TextAlign>
+                    <VerticalAlign>Top</VerticalAlign>
+                  </Style>
+                </ChartNoDataMessage>
+                <DataSetName>DM_OS_WAIT_STATS</DataSetName>
+                <Height>3in</Height>
+                <Width>9.125in</Width>
+                <CustomProperties>
+                  <CustomProperty>
+                    <Name>__Upgraded2005__</Name>
+                    <Value>__Upgraded2005__</Value>
+                  </CustomProperty>
+                </CustomProperties>
+                <Style>
+                  <BackgroundColor>White</BackgroundColor>
+                </Style>
+              </Chart>
+            </ReportItems>
+            <DataElementOutput>ContentsOnly</DataElementOutput>
+            <Top>0.40278in</Top>
+            <Left>0.125in</Left>
+            <Height>3in</Height>
+            <Width>9.125in</Width>
+            <ZIndex>1</ZIndex>
+            <Visibility>
+              <Hidden>=IIf(Count(Fields!wait_type.Value, "DM_OS_WAIT_STATS") = 0, true, false)</Hidden>
+            </Visibility>
+            <Style />
+          </Rectangle>
+          <Textbox Name="textbox3">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>Historical Waits</Value>
+                    <Style>
+                      <FontFamily>Tahoma</FontFamily>
+                      <FontSize>16pt</FontSize>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style>
+                  <TextAlign>Center</TextAlign>
+                </Style>
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>textbox3</rd:DefaultName>
+            <Top>0.01389in</Top>
+            <Left>3.375in</Left>
+            <Height>0.375in</Height>
+            <Width>2.625in</Width>
+            <ZIndex>2</ZIndex>
+            <Style>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+        </ReportItems>
+        <Height>4.77778in</Height>
+        <Style />
+      </Body>
+      <Width>9.5in</Width>
+      <Page>
+        <PageHeader>
+          <Height>0.54042in</Height>
+          <PrintOnFirstPage>true</PrintOnFirstPage>
+          <PrintOnLastPage>true</PrintOnLastPage>
+          <ReportItems>
+            <Textbox Name="textbox15">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>="Report Time: " &amp; Globals!ExecutionTime</Value>
+                      <Style>
+                        <FontFamily>Tahoma</FontFamily>
+                        <FontSize>8pt</FontSize>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style>
+                    <TextAlign>Right</TextAlign>
+                  </Style>
+                </Paragraph>
+              </Paragraphs>
+              <Top>0.13854in</Top>
+              <Left>6.375in</Left>
+              <Height>0.25in</Height>
+              <Width>3in</Width>
+              <Style>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Textbox Name="Textbox29">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>SQL Server :</Value>
+                      <Style>
+                        <FontSize>12pt</FontSize>
+                        <FontWeight>Bold</FontWeight>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style>
+                    <TextAlign>Right</TextAlign>
+                  </Style>
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>Textbox29</rd:DefaultName>
+              <Top>0.13715in</Top>
+              <Left>0.875in</Left>
+              <Height>0.25in</Height>
+              <Width>1.34028in</Width>
+              <ZIndex>1</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>LightSkyBlue</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Textbox Name="SQLServer">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>=Parameters!SQLServer.Value</Value>
+                      <Style>
+                        <FontSize>12pt</FontSize>
+                        <FontWeight>Bold</FontWeight>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style />
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>SQLServer</rd:DefaultName>
+              <Top>0.13715in</Top>
+              <Left>2.33333in</Left>
+              <Height>0.25in</Height>
+              <Width>4.04167in</Width>
+              <ZIndex>2</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>LightSkyBlue</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Image Name="Image1">
+              <Source>Embedded</Source>
+              <Value>back_button</Value>
+              <Sizing>FitProportional</Sizing>
+              <ActionInfo>
+                <Actions>
+                  <Action>
+                    <Drillthrough>
+                      <ReportName>QuickOverview</ReportName>
+                      <Parameters>
+                        <Parameter Name="SQLServer">
+                          <Value>=Parameters!SQLServer.Value</Value>
+                        </Parameter>
+                      </Parameters>
+                    </Drillthrough>
+                  </Action>
+                </Actions>
+              </ActionInfo>
+              <Height>0.5in</Height>
+              <Width>0.5in</Width>
+              <ZIndex>3</ZIndex>
+              <ToolTip>Back</ToolTip>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+              </Style>
+            </Image>
+          </ReportItems>
+          <Style>
+            <BackgroundColor>WhiteSmoke</BackgroundColor>
+          </Style>
+        </PageHeader>
+        <PageFooter>
+          <Height>0.25in</Height>
+          <PrintOnFirstPage>true</PrintOnFirstPage>
+          <PrintOnLastPage>true</PrintOnLastPage>
+          <ReportItems>
+            <Textbox Name="textbox24">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>© 2006-2007 Microsoft Corporation. All rights reserved.</Value>
+                      <Style>
+                        <FontFamily>Tahoma</FontFamily>
+                        <FontSize>8pt</FontSize>
+                        <Color>Gray</Color>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style />
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>textbox24</rd:DefaultName>
+              <Left>0.125in</Left>
+              <Height>0.25in</Height>
+              <Width>4.125in</Width>
+              <Visibility>
+                <Hidden>true</Hidden>
+              </Visibility>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+          </ReportItems>
+          <Style />
+        </PageFooter>
+        <InteractiveHeight>0in</InteractiveHeight>
+        <LeftMargin>1in</LeftMargin>
+        <RightMargin>1in</RightMargin>
+        <TopMargin>1in</TopMargin>
+        <BottomMargin>1in</BottomMargin>
+        <Style />
+      </Page>
+    </ReportSection>
+  </ReportSections>
+  <ReportParameters>
+    <ReportParameter Name="SQLServer">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>localhost\sql17</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>SQLServer</Prompt>
+      <Hidden>true</Hidden>
+    </ReportParameter>
+  </ReportParameters>
+  <ReportParametersLayout>
+    <GridLayoutDefinition>
+      <NumberOfColumns>1</NumberOfColumns>
+      <NumberOfRows>1</NumberOfRows>
+      <CellDefinitions>
+        <CellDefinition>
+          <ColumnIndex>0</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>SQLServer</ParameterName>
+        </CellDefinition>
+      </CellDefinitions>
+    </GridLayoutDefinition>
+  </ReportParametersLayout>
+  <EmbeddedImages>
+    <EmbeddedImage Name="back_button">
+      <MIMEType>image/png</MIMEType>
+      <ImageData>iVBORw0KGgoAAAANSUhEUgAAAFkAAABXCAYAAABvAenfAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAABc1JHQgCuzhzpAAAABGdBTUEAALGPC/xhBQAAAAlwSFlzAAAOxAAADsQBlSsOGwAAACF0RVh0Q3JlYXRpb24gVGltZQAyMDE4OjA2OjE4IDEyOjM4OjEw9xDcbgAAIbtJREFUeF7tfQeYXVW59nt6n14zNW0mjTRDElKBJARCIoYSingpgogXovx4QUUvRS6gNEFRkSaIivoj5RFBCAgYERCMJIGQQsJkMslMJtPn9Ha/d82skz0nZ5Izk4Tnh+d/n+ebtffaq77rW9/61i5nTEkB/j+OKoZEMpP6/X5Eo1HE43F1ztBkMqljhunIFPf/GjJRoPvD0GKxqGOz2QybzQaXywWr1dqf8tDIiuRAIIDu7m7EYrFUhRqsmGCcbpQ+/7TB2HYe6/NEIqFCQsdTcnJy4PP5+q8MjoOSTI3du3evqjSdTC06zliMjv80Ir0fPNdx+pjCaySfM7mwsFBp92AYlOTOzk50dXXBbrenKmHBmmxCkzlIEZ8JGPuoidX91SFnuNPpRElJiTpPR0aSm5ublRbT7hgvk2BWRGE8RTfis4z0fuq+UzT0eWVlZX/MfhxAcktLC8LhsLK9vKRJ1aLjCB7r7DruswRj39L7p+20kQOCx1VVVf1nfRhAMhe39vb2lAbrgo2VMOQ1QzaF9PPPAozEGo81N7rPRj4Y0sSWlZWpcyJFMoOPPvoIDocjVSDjjAsez43XjHEMP2vI1D/df0JrM0PjWhWJRFBeXp5aDFMkNzY2pjIRujCGxmMjmboBGsZrn3ak98t4TjCOxGYyG0xLkzt27Fh1rujnIhcMBtVFLYMVbITxuk6fnkcjPe9QoMvNJMPFYO3R5Rqvp9fDayRY91nHGfNy00IPjVCavGfPHsV8emGEzpgN
+jBUdDpjfKguv1dq38bFYzEob+oqVP1IPKZAAMdEk1huLxRHr34UeDphf9yMb6PTp0PEjR47sI3nTpk3KfrBgXmCoKzGGvJYJOg9Do20aCrjY2m0U8WpkZq3ftBnrNnyAbR83oqGpGe3dPegNhhGOxOBy2OF2OVGY50NNRSnGVFdgyoR6TBYxWx2ICNmRaEwRPxzQBOj+6P6nQ8cbTWw6P729vZg4cSJMkii5YcMGeDwelZGumwbPdWG6Qn2eDn2dlWZLNNM57DZ4XA5s3rIVv3nqOfz5lTewcdN2wOGBrbgC3sJSuHILYXXlwioOv9lqY07ZaUUQD4cQ9vfA39mG3rZm2f93YNqYciydPRXnLF+EurqxCIRjCAvhRjIOBt3+gxHMa8br+tx4zHJohktLS2Hat29fcvfu3UqTSLC+N6HJNhKmCzoYBmuYESzb63YhEgrgwcd/j5//5o9o2NEM9+iJKKydgNzKMbDmSeOcOYhbHIibLIglZQBF+iDtMyUhVgRWCa1IwJIQIsO98Le3oH3XdrRsfQ91BWZctGwuLj7z83B4ffCHZGBEyw+FofZTDyBDCvNzF0jhltskmw9FMg31YEQTPD8UgYdqHAfM7XQgINr33VvvwSO/eRrm8pGonDATeaMmwZxfjYjNg96YCcW2KMZ4o6j1ARUeoMgtAyNKLJNY2ePeCNAaiKOpF2joTWBrjwWtUSd8DgvcVrHp8bAifPeWdejctg4XLZqEGy4/H568QtHuaIqYwZBNX4391QRTSC4Hk+L1emFqampSJNOBJslaWAlJMWry4YD+t9dhxc13/RS33vULuMceg6rpJ8BdPRkhZyGCMWB2QRALRgDzKu2oKPDCbHcjYRI9lbbI5FTkapACxsjEFpsXRTISRFNbD/7WGMKrTQm83eaAR2aLzyapIgG0bH8fTf/6K771hem45svnIpi0ihmJkq2+Ag8DesA0sTQTjKO/nJubC9OuXbtSmqy1mSHJpSZz
+tLQWH2x09ajq9PuPzSjI9WLtG2/hrMuvQbfJjbp5y+EZMxNd9gKU2cNYVRvDaXUe5ObliXlwimmQBido11hmNiRQIWTmSZtpPizxELo6O/D0pi48sc2E1oQXxZwGsTAa3n8X1sZ38NBVZ2DO7FnoDISRFEKMfTP2eTAwjRamI7kklgRrU0HJkz4pkkWbFbHUZhKrQ2bOpMnpDRoMLKMg14Orv3cr7nvgCVQsOBVFUxbB76tGqSOCqyYlcGJdIRKOHESSA+9wHQ50u+0kPNKDNR/sxh3vxtFmzlVkh7o7sekfL+LyY/Nw8xVfQnfUpAgZDIfqL+NIMkFXmMfU4gEki6TMhSZbm4pMJGcDh5QRj4awYOWF2NoawLjFZ8M5ehZ6kzZcPSGEs6cVI2bPRVRpbHYr/3DA9tssYqPDXfjNW424c70J+bIYOc1JNGzegLK29/DszZfA6isUt0/MxzChNZnkUpu15OfnDyRZE63JHkyTDwWXuFp7m/dgykmr4Kwch5ELzoK/sA6TcoK4e6EbecXlCCZEc/tH/5MAZ5VTutKxtwlXPteED2MlKM1xomNfM/wbX8XLN65CXmml8q+HM5uotcynNVmHtMkHMEhi2SB9PBThgLhkk7CzsQHjF5yG/PGzMeaUS9BVUIdLxgTx6GllcBdVQJyClB38pIRaFogn4SmuxG+/dAwuqtyHnS3tyCsqQ+GxKzD3hqexa8dWOPtncaYyBhNCK6Mx1IOlYnjCxNom6vOhgtrfIho8bdHZKJu5BCMWnot2ewnumhnG1+bXIGj1qa2vVNCf4+iAbddrygBIvaw/YHFj9anT8aM5cTQ0NsHudqNy1jIsvetVtOz8SMzLftc1G7AezZkmllzq+hXJWnPJ/lBHUQsJTogNnnbS2SiZvgDlc85AlyUXvzw+hkVTRiIAe6rioylsR0GuDzt3NfW5eRnS9Gm1BSfNmorHT/GgseFj2ESDR0w/EcvueQ3RntaUuRyuaB4V
+r+qvQEfokRgKWGCez4W5K86Hs2oCKoTgdlMOHj4+gal1QnBs/y3BowUqSo7PI16aH8efcSEe+t3T8Hrc/VcPBNvjj8bxuSmT8PjyfDRs3wanww5v/XE4/a6/wGsKq35lC01uJqhSUowPQ4uZpzAvB1+56rvY0ZNEzYJVaLUU4p45CUyvq0VIrW37/c4jLSTX7XIhx+PALXf+BCPGLcTHARtu//Zq+IOhjHm0EEEhesbUifjxklx8tL1BtvtutOZPwjUP/wV5LivM/WbnUKKR6fwATVaR/SOoMxxMHDL6L/31Nfzy98+jTmxxj/jAX58QweLJYoMTw1tAsxG2kW4i78T9Zc3LKBw/F7c89ifkLb0Ij912LeLid2dTNxEUz23ZvGm4cnwEu/bsRXFhAf5vow+vvrUODtuhSSaMnOkwdY1/tInQkdkufCzYaTFj1WXXoGL+ClhGTMbUnBC+Oq8KAfGHk8mjYyLoYubT7ootnXL8F3D2ZdehcNoSjF55Nb5w8hLMG1uCyBBuc7KdftmQXH3mfIyLb0dvIIQR1dVY/XSD+NfdqTVrMJArI2dG7nisSCZZFEaoSDnWmQ4mOV4Prrv1LkR8pSiauBBBcZHuXlqIqN2XVf6hCtuV4/OK5x/Bl756FabOX4kWWwkmnn8tSmafDltuKb4zLw8hsyPVwWyF7Q1bXHjg0gXYu1m23ibhoHAkfvj0O/DYhBsDP5mEbdN1GvtO9F0R8IIROsFgoDZ1tLXirvt/i5pZp6LDWohrpptQWFIibtKR1WC2hRucfJ8bd9/3CxTVzcGz/2rA2HOuQtWiC+CuGI+OsAlfHm9CRWkRorHh1c+b/MXllbju+BLs/LhBFnMPHtqYQFtLk3pSky2MBJNXs47Q2qs1muDxYOKRTcd3b7sHntGT4aqciCpnGOccW4VIcuAdvMMV2t3i/By8tnYtiifMxXX3/ga1J52Pscu/htwxM2GxO2UrG0a5PYxLjitDCLy5Nbz6
+2e5wLImLP78QRT2bEZNtsa+oFHe/uAVu6+B86P7qUIPnKq7/PKXiWqP1cSahjQr09oib9Dwqpi5EW9SF/5rthsnpVVvJTHmGKmxsXo4Pe/bsxowlZ2DFuV+Hq34uJq66CoVTToLdU4iEbGUTorUdgYSYiVxYPHmHXT/zy+4E16+cgu0ffgCfKNPvNyfQ296q+p0pD2EMNbkaimTFdv8I6BHRx5mEHsXPHnkcjsoxsJeMRo0nihMmlCOWzJx+KGIRM+TzeGTXBVz69WsxfsZSfBTyoP68q1E26ww4CquRkIWKj5+4YPVGEuoe9OJjKhBNDE+D0yUqa8vS+TMwItKAaDgMR04BfvXGdtilTZnSa/6MPBI8V3H95weMCMHjAwXil9rxk189hdL6mfAnPfjSJDssTs9haZE0ST3vo929/+HHkFP7Ofz61fUYc8YVqBG76xGTZKImxcTf4saG+RKieZEIrltUIjtKh9pgZCp7qMJ+WB0eXHLCWDTv3Aavy4HfvtcDZzKUkRcdZwyNGKDJmvlM51qoxevWrceejgi8lfWyWETxhanFosXZOe3pwnp496+wIAdv//MdlE6ci2/c/HNUnbAK9WJ3fWNnw2z3yJY9qu7akVgtbYE4LvucC6MqSkW792vOkZCILN7nn7oQPQ0bYZbCd0fd2LCjWT1Rz5Q+XTR/KZKN0Bc4IsZMWmxWC5758xrRrLFIOvIwp1xcuZxc6eTQXTbauFxxyeilzDvlLCz6/JdhqpiK8Wd9A0WTT4LNW9Rnd+N9txGNEhUSSh0xXDpXfPJE31vvmeoYrvCpjC83H/NrXAj0tItyufDS+63qyUt6Wl13ppAY1FwwkbFTWhwyks+8vBZ5VfUIRM1YPEYWPEvfzZ9M6TMJy+Z7E07xP6+89nrUTliI9a1J1J19FcqPo92tVZ1MaNOQQTp6Y7hhcaEMRO5hL3aZhP0xWaxYPrMe+3Zth0vWipe3+WFNRtUDMWNaYrCQGODC
+GUN1UY6NYpFK47Ew/r2pEb7SKvQE41hcn4eojFV62owimsuXpfNlK/zYb/8AV/U03P/M3zDy85ei5sQL4a6cJJXahFxZ1KSTuhPp4g8nMK/SjKVTqo/YYpdJ6G8vP2Em2ra/D5s5gQ2tsuCGA2oGGtNl4k+Hikf1N0vYZMl/9733YcopBMRU1PhiyBU3ix0/FNiw/LwcrF//HqomzcNl//UDVMxajvpTL0eObC7MDrfYXSFXTEO61hqF5PMRz/dPFTNhcmZV93BBE5ifX4gqn9QZDMBkdWBjYzus4ocPBUMi2WK2YMP7m8WlKUZSTERtrmimLIQH6ydHk9vvQG83lpx2HuYcfzZC+XWoO+PrKJhyskz3YsSjcdFePiPre0J9MNknZuLSmV6MrCwVMyHEH0VwADnzRpd4EO7thMVkwYd7etVLNUPBkJJzJ7VjZxPsvkLZOptRky+7KzEhmbSJ5PJRlE/cn2/d8D8oH3ks/r69G6POvBKls8XuFo1UHkIizncf1POoQ0pMpm+pM4ErThylbrofbbBfZrHFI0vzEJLFT2wrdnaEYWZ7hoAharIJDXv2wuHLR0Q6XJUrBJsOLMIu/m6emIYnn3oGtopjcMejz6N62UWopb9bNRkm2l2aBjX9xc5mKW3+CG46pQwOj3gzNB+fAKg+tSOKEOhsE00GdpPko2kuOJL7OnpglW0nFwX1woh6yNMHGvv8/Fxs2bwZo6cuwPmXfRelU5egbvlXxd+dK2uaNyu7m0kCoTjmVtmwdHo1wtnfxTxs8P278qIC0eQOnqktvIkzbwgYEskm8RF7gxEhS3ZXYg+9DotUq6+JAx8OYsWqizBdFrR2+wiMXrkaBZNpd2WzoOwu36480M4eSuKyzeUrVbesHImwyXVUF7sDIHV5PS7EQr18BVbcViE5q7ea9mNIJBP0SU2yAMalQou4NdRkEmyzmjF25sn40ysfovq0/0TZ7DPF7o5ShNAly9buZhK/aPFl
+s3NQV12OmJD+SUIMldqAxTkDpS3DuY06JJKTMnVsYm9JHEcz2v9mE88jMsKdH72JRx+4GRFfJbrD0jBZ1JIJ0WBp3HCFHbPbknhufRv8/oAyWZ8k1AyN9Jk3rgu2oboWgqHlEDJzPR4Z1ZjYJSE1IKYj1eckOntCOHvpcdh+xyJ8cZIFTS0dCERE86h80sD0hSwbobmwSh1bW8O48w9rxUQNvZOHA5Lc0dWl/Py4rCVeh6hXhsX+YDBTC42it8cEj40Sk/iS/BxEwyHV8T0dQTXC+jpNifrkwOLDLV8+ARtvmoXJBWE07u1Rtw9NQhjTD1WSUm5Jbg7u/esebN66HVbRJmO7jqYQu/a0yAx2y24XKHDJOsRXzAxpjLwZQw01JIykcNQOhrhsGGorSxAJ9CqSP94XkgL6forBCJLdLXY0r7gCz153Cp77zzo4ot1o7gxJPVKfQVOzFd4k8uSWYvUvXoMDMoPEkznaYL/Msth/3NAMp8er3j6qzHdA9GUAyJ0x1HxowlMt5QkjtehzYzzfGR5ZW4FYUHY94ld8vNcv/nKfYdZpUmmlQXxLsj2YxIwpE7HhjmW4dUUx2to60BWIqQWF9jZ7icNtt+LNJgt+99Lb6uZSepuPtBBRscdbPt4FuytHeVS1xaLRakLuT6fbQaSfq4HiASONIaETGeNiok1T6kcj3C2OuVzf3BxCSPb0xjTpYDnBcASdcQf+Y9ksbP/RYpw10YpdLZ0Iib02MS/rkgE8lNC/Li0qxLd/vRHdHX2Pg44m2K9gKID3t/N9OTGTshaNH+FTypYJmgdNtJaUTeYFreY8zwRWMmFcHazRHpnCYezpiQlZHWoneCjwhju/RIrZ83DX5Yvxr5tmoz43hJ17e2XwpE6pn204lHAjELQX4nsPvwKPeB3S6P4ajjw4iI27diHcHoTF6YNNTGN9ZZ54VQM3I5qvdN40twNssrEzhPGcwhsy/NRg/tSR8Hd1okCc9GfeaoBN
+7FZ62sGE7/F2BuMoHVGF529ajie/VgdTqAut3fysQAqXNAcTLoJ5Uu+v3+zCm+s2qTtimeo5EsJvCp/4459hrZLZG7fiuJGyKTHZ1R4hU3rNIaE5TZkLwkh0+vH+QhKy84pj2dzJ6GnfA5fs+F58r1X8yL5PhnW6QwntdVhMSHsgibmfOwYf3Lsc3zu5GPvaO9AtAyBVptqQURIx5BcVY/X9f4M1Lh7OEOrOVtifWCSC5178G3LLRiEkhnjJxAJEkpYDZh1hDNlGHVIUycYLLDw9kRbG8YvQL5w0B4HmnWKXk3hrewAte/el7mCk5zmYkGza666YA19ZeRy2/GgJlo+zKHsdjvTXz3ZkEH6isKXThZ89tRYePkYeYt0HE4I87GluxsZ12+AqqEBYvKVTppWpG2NGbgie65Bx6dwNWPgIfZweanC6V1RWYPooLwK9XeqdtJ8/twEOy8B02YLlk2x/SDY4rgL8ZPVSvCn2usYbwu5WvzRYOty/8A0QyVOSn4tb/7gFu5t2DekNn2zA++R3//QRWGvGI2bNwYxqO8pL8qX/B9pjo2gl1UKohY+dJPtaeM54Y5zxmrqXcPp8dLY0wOO04levN6mb8kSmPNkIy+WHLJ3i3lVW1+DlW1fg8cvGIubvFHsdkTTS6LQ8sprC4i7GN3+2Bm7bfm06XCGC/l7c//jTKKiZBH8EuHB+OQJR7voGckXRXBk5I3hOUc/4eGCMpOhMmSQYCuO8006EPdAkW2zZ4Zm8ePBZ8V2tUkZaOUMV1kt73RYAjp89Ge/ftwJXLylAy75O9MjgSqKU8L6Ix2XHC5vCeP71f8FuzfyGz9BEtNhpx49/8UvAlg9rXiU81gROn1uDkKxHmfIYCU6PJwa4cER6IuO5Fo5mOGHD/1k1G23Nu9W3ej98Ziv83R3KNmfKM1RhHcFQBL1xJ1avmocP712MRWPMaGzpRph3wnTbxHcuKirCNx98C1HxUqg0g7U7G5HsMit7
+cfPtv0DRuNnoidqxekk5IibZhEibMuVJF9ZvbMOgLlymOKMERJu/fsEKmLsblDbDVYj/fuhl8V15f+7wp62um2tAdyACq6cAD1x9Ml6/cSbK7fzENyidljaKGRH9xd6wDz987K/w9N9ASi8vG5Eq4fU48e3/vhXIqYC9cCQc5ji+cnI9grIQZ8pD0fXpUHNH4aCnSNYX9fmhhJ2PwI4fXLYALbsakC++6yOvtGDdxk3qdmCmPIcj3Ah1BOLqRzpeveM0PPBlcav83Wjv7Xs3g2/c/+ylXdi85SPZRAyvfr4d9O6//o1f/fJJlIybi/aQAzefVYuoxa36mykPhRpO6JDQ18irqbGxMblt2zb1gTm/+NHC94/VKBzkRgyvF/lsmHPB7Wi2jFGvW0X3bcG/H7kEMdWwgSvxkQLb5JSNgjnWi9t/9w5+9HwTcnJ8YvuA0b52/PmOL0H2Nintygbsr13cwtFTToS1YhrsNfNQW+zEmpsXCdl9gzYYNKEcCKV8hq9SacoG3OrUMMYdTNiJDn8cj990DtoaP1T2OOSswIU3/FbMRt8gZMp3uEKN4W9X+BNOXHP+Aqy/ZxHmVJvQ1hnA2ztNeOL5f6RuIGUjbCfNxLkXXYGgNR/uymnoCSbw0NemoCtiTc3y4UjKXOgRZ6gLNB4fTHinrbSsAnddOgO7dzUi1+fBmi3ATff9AT5n30uI2ZQzHFH2OhiDK6cIj3z7ZLzwvWkYXerEFfe8ja7ONvUUJVM+LWwX25fjc+P6G3+I1159DyUTT0RryIXbvzgKxaUlqn+Z8qaLkbf0OMs3vvGNG9ra2tTNEFaoQ6OZ0JkGE34EM2faGGz5cCM2NArpJcVY89bHcCeaMXfGBPVo6mgQrdvGeyqhaBKlxUW4fNkY5HnNeOKFf+PUhRNl5zi4R8A+kuB7fvoQ7rz9ARTOWgm/vRorZ+ThW+dOR5doc6Z8gwlnGPvJkArAUP3s0M6dO1M/9KTskthVhkbS
+swF/1yLflcTiKx/Cdn+R0ujdWzbiO+eMxeqLV6LLz0r77j2z3KMFtsNhN6sn4yEZ3PQ1hWQQ7Bff5L/7J/fjtv/5MQqE4HDOeIwvd+JPNy5EZ8SuNj/ZQCsQSdW2mELbPGLEiD6SP/jgA/U6kpFkSrpGHwrM40wGcfwVj6M1Wao+YNy99QNcsKgQt11zgUztvobojh5NsO2Z6tGKk+N141vfvRmPPvJHFMz4PCK59SjPt2HN9+cjaPYhLoOULUgyYVz4GPKXAioqKgYufBTjtB7qFOfoBZIOvHTvOSix7ENHTxAjxk7Ao6/3YOlF3weivcpN0umHWv5QZLB+UImQjGHJ8vPw6K9eQMHsMxD01qG20I7nb5iLADzqgxydPhth+bqO9JCi1JTaRdGJtRgLyFbUNIEbL9+zChML/Gje142yqlH4KFyL+mXfwd/f+IdMU2dqhmQq40gLwfr4yu4bf/876icej41NIRTOPh1d1hocO9KN526aj4jZq9qfqYyDiSZzsGsDbhClhzqjLiRbYUP9cQee/sGZOG+WE8272+Dx5aGk/kRc8J1ncPal1yPQvQ9edx/ZOh/rGk59Rkkvg+V7xTQEZOOy6tyv4D8uuAreujkonHAK2qLFOH9+MX79nXnolu0z220sK1vRdRpFKy6vm3bs2JFct26dWvj0RkTbZTZQa9xwYDbL4uI244W163HZj9fDk5MHr9OOno49CGx5E2eeMgHXrv4iiorLEAqLLTN0crigzaXwpUf+EuK+fa249fb78OQfngXKJiC/Zjoizkr1fPHnX6vHSbPGojNIN3P4Gye2l4TSDnOg1GwWu0ybrH5GkiS//fbbKZK58zN6GCSZjR4OWDnzO+wWRP0duPKev+P1D0IoKPLBaoqjc+9ORLa9i1nHjsCFZ5+MJcfPkZGxqe9BuI3u2zFmQ7hJ2muR9svCre7ExfHSK2vx8GO/xz/f+CdQNBr5VVOBnGp09FpwwhQffnT5NNhc
++epJDzXvcPpoJJnkaiHJY8aMgamhoSH5+uuvK3/OSLImmiDZh6tdLCPXCfzj31txzcMbsauNNtKtyPZ3iWZ/vFEWhzYsmDEaC+dMxUlCeHl5ad9rtlK3up9saAPLNMs22CIhO8inGC8KsX977S289sa7sshaYaseD0/JKCRdZeLz2lBTYsVtF9Zh1jG16Jatsp7OwwXbwAHSJFODSawmORQKob6+vu/H91544QX1S3wklSQbTYfW5OGOtBEsgy8mem0xvPjmNtz55FZsa4rBneOGS3xbRAMIdjcj0NoANIu4E6gYkY/askKUFeXB4fVQdVgQQt29aG5tx449e7Fn114gHAK8ZbAVVcKdVw6zpwQheBEMJDG2yoFvnj4Si4+tRa9skzlTDodcDZZBIdFai0myJpo/lzxjxoy+X529++67UVxcrEimv0yijWaDOBzbnA5+cc9p7bXHsGVHC379yg489eY+BIJmOD0yi2xm2ETDE5FeREM9iIV7EA37keAtVWofErBYbSJ22BwyG5w+mPitn8mtvu0OBRLwesxYObsI551QhTE1JfBHLer5XLYbjGxgJNlIMDWYWs1fnV22bFkfyffdd1+KVIYkWpNNkjXRWqNZ8BEBNVvMiEOKF2rw3pZmvPTuXvxzaxc2NARl1yYDK5pvtpilDayb7pC4fZK17zGfdJCv84hmmmVgJtc4cWxdLhZNLcHUuiLE4FIfpFNzpdF9dR4hGAnWGw9NMDWY5oP/o+Xaa6/tI3nNmjXQW2sSzZAka9JJstZkHR4xogV68PgiIZ9C28xxaVgEu/d2Y2erH7v3hdDeHYGfHohsxOxCuMdpQYHPjhFFbtSUeiT0iiaLG5bkp2F822m/G3ekwDYS2g5TSKbWYk2wPieHF198cR/JVOs777xTmQy9+LndbhVSSLb2NAhNytFCX9nc0osiC/HqTP4okWNNG2c+j6nRfa9OHVlSjWCbSKiGXjRJKIUEa5K1qVi6dCkm
+T57cRzIzPfjgg+pfYGhStcmg6EVQE01hNlasQ+JoEv9Jo5+WAf0jqMVatD+sSdZazHj+nv3111+v8qRI5j/Ruummm9T/x6B5MBLNY000KyTJDLVo0nXDjI36tMHYBwrJJHT/KLTB1OR0W8yQcbx1fM4552DChAkqb4pk4qWXXsLatWvV70uSUG2TKTzXiyBJpVYTmtBPM7GDQVOjyaWQXC0klZqriSbB1Gb+COrll1+u8hKKZGZWJ0LUvffei56eHkWs1mgSrIkmuYxnWpKt81FYjg4/7dD9SBetwRRtKig8p5nQFoHgLFDcSCbJ2+eKMCSpt9xyiyqMxJJUkmvUZMZRNLkUQoefBZALHWohJ+RJE6pDTTzXtBtvvDGVL2VWRb2TTEDRibn7o+/MUaE7RxjJZWZdgCZbN+qzAq0wRptMbnhO0VzpeM7+K6+8MsWNVkgqp6m9vT3J0aDhptrTppBcavSrr76KHTt2oLq6OlWgLkSTrBujkX7+aUS6wvBcz3R9zH5SwbjhoHOwYsUKpdVUSu3+aqfBJImSNNr836ckmiF9PBJN0vlfzd555x1V4KhRoxS5ujJCE63PiU8z0cZ+aBjjtHJt375dLXb0IGpqapTW8l95kmASzRtu2jsztba2JkkmM2g/j0Rrskk8hfaGzwI5WiRcTYP+0dSkG0UTraebBq+lQ8elD9aRRPrAG895rOvWx0YxmgitxePGjVMvrmgiSbAml1qsxW63438BEIkkh3pSeVkAAAAASUVORK5CYII=</ImageData>
+    </EmbeddedImage>
+  </EmbeddedImages>
+  <Language>en-US</Language>
+  <ConsumeContainerWhitespace>true</ConsumeContainerWhitespace>
+  <rd:ReportUnitType>Inch</rd:ReportUnitType>
+  <rd:ReportID>1eaa6e73-afc1-44c3-a305-41ca9c762304</rd:ReportID>
+</Report>

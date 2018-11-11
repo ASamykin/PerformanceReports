@@ -1,0 +1,795 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Report MustUnderstand="df" xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner" xmlns:df="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition/defaultfontfamily">
+  <df:DefaultFontFamily>Segoe UI</df:DefaultFontFamily>
+  <AutoRefresh>0</AutoRefresh>
+  <DataSources>
+    <DataSource Name="CMSServer">
+      <ConnectionProperties>
+        <DataProvider>SQL</DataProvider>
+        <ConnectString>="Data Source="+Parameters!CMSServer.Value+";Application Name=Report:CMSFinder"</ConnectString>
+        <IntegratedSecurity>true</IntegratedSecurity>
+      </ConnectionProperties>
+      <rd:SecurityType>Integrated</rd:SecurityType>
+      <rd:DataSourceID>248ae3f9-84f0-4324-b913-e51cd20e315e</rd:DataSourceID>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="DataSet1">
+      <Query>
+        <DataSourceName>CMSServer</DataSourceName>
+        <QueryParameters>
+          <QueryParameter Name="@src">
+            <Value>=Parameters!Search.Value</Value>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>with data as (
+	select convert(int,1) [id],convert(sysname,'\') [folder],convert(sysname,'') [FolderDescription]
+	union all
+	select server_group_id,convert(sysname,d.folder+i.name+convert(sysname,N'\')),convert(sysname,i.description)
+	from msdb.dbo.sysmanagement_shared_server_groups_internal i
+	join data d on i.parent_id=d.id
+)
+select d.folder
+,d.FolderDescription
+,s.name [SQLServer]
+,s.description [SQLDescription]
+,@@servername [SQL]
+from data d 
+join msdb.dbo.sysmanagement_shared_registered_servers_internal s on d.id=s.server_group_id
+where s.name like '%'+lower(@src)+'%'
+option (recompile)</CommandText>
+        <rd:UseGenericDesigner>true</rd:UseGenericDesigner>
+      </Query>
+      <Fields>
+        <Field Name="folder">
+          <DataField>folder</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="FolderDescription">
+          <DataField>FolderDescription</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="SQLServer">
+          <DataField>SQLServer</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="SQLDescription">
+          <DataField>SQLDescription</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="SQL">
+          <DataField>SQL</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+  </DataSets>
+  <ReportSections>
+    <ReportSection>
+      <Body>
+        <ReportItems>
+          <Tablix Name="table1">
+            <TablixBody>
+              <TablixColumns>
+                <TablixColumn>
+                  <Width>0.33333in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>2.94792in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>3.3125in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>0.20833in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>3.01042in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>6.16667in</Width>
+                </TablixColumn>
+              </TablixColumns>
+              <TablixRows>
+                <TablixRow>
+                  <Height>0.22in</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox9">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>N</Value>
+                                  <Style>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>#666666</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox9</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                            </Border>
+                            <BottomBorder>
+                              <Style>Solid</Style>
+                            </BottomBorder>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="textbox2">
+                          <CanGrow>true</CanGrow>
+                          <UserSort>
+                            <SortExpression>=Fields!folder.Value</SortExpression>
+                          </UserSort>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Folder</Value>
+                                  <Style>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>#666666</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>textbox2</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                            </Border>
+                            <BottomBorder>
+                              <Style>Solid</Style>
+                            </BottomBorder>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <FontFamily />
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="textbox3">
+                          <CanGrow>true</CanGrow>
+                          <UserSort>
+                            <SortExpression>=Fields!FolderDescription.Value</SortExpression>
+                          </UserSort>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Folder Description</Value>
+                                  <Style>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>#666666</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>textbox3</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                            </Border>
+                            <BottomBorder>
+                              <Style>Solid</Style>
+                            </BottomBorder>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <FontFamily />
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox11">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value />
+                                  <Style>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>#666666</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox11</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                            </Border>
+                            <BottomBorder>
+                              <Style>Solid</Style>
+                            </BottomBorder>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="textbox4">
+                          <CanGrow>true</CanGrow>
+                          <UserSort>
+                            <SortExpression>=Fields!SQLServer.Value</SortExpression>
+                          </UserSort>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>SQLServer</Value>
+                                  <Style>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>#666666</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>textbox4</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                            </Border>
+                            <BottomBorder>
+                              <Style>Solid</Style>
+                            </BottomBorder>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <FontFamily />
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="textbox5">
+                          <CanGrow>true</CanGrow>
+                          <UserSort>
+                            <SortExpression>=Fields!SQLDescription.Value</SortExpression>
+                          </UserSort>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>SQLDescription</Value>
+                                  <Style>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>#666666</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>textbox5</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                            </Border>
+                            <BottomBorder>
+                              <Style>Solid</Style>
+                            </BottomBorder>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <FontFamily />
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+                <TablixRow>
+                  <Height>0.20833in</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox10">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=rownumber(Nothing)</Value>
+                                  <Style>
+                                    <FontSize>9pt</FontSize>
+                                    <Color>#333333</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox10</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                            </Border>
+                            <BottomBorder>
+                              <Style>Solid</Style>
+                            </BottomBorder>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="folder">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!folder.Value</Value>
+                                  <Style>
+                                    <FontSize>9pt</FontSize>
+                                    <Color>#333333</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>folder</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                            </Border>
+                            <BottomBorder>
+                              <Style>Solid</Style>
+                            </BottomBorder>
+                            <FontFamily />
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="FolderDescription">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!FolderDescription.Value</Value>
+                                  <Style>
+                                    <FontSize>9pt</FontSize>
+                                    <Color>#333333</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>FolderDescription</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                            </Border>
+                            <BottomBorder>
+                              <Style>Solid</Style>
+                            </BottomBorder>
+                            <FontFamily />
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Image Name="Image2">
+                          <Source>Embedded</Source>
+                          <Value>settings_icon21</Value>
+                          <Sizing>FitProportional</Sizing>
+                          <ActionInfo>
+                            <Actions>
+                              <Action>
+                                <Drillthrough>
+                                  <ReportName>ServerCard</ReportName>
+                                  <Parameters>
+                                    <Parameter Name="SQLServer">
+                                      <Value>=Fields!SQLServer.Value</Value>
+                                    </Parameter>
+                                    <Parameter Name="IsSelected">
+                                      <Value>1</Value>
+                                    </Parameter>
+                                  </Parameters>
+                                </Drillthrough>
+                              </Action>
+                            </Actions>
+                          </ActionInfo>
+                          <ToolTip>Host Configuration &amp; Services</ToolTip>
+                          <Style>
+                            <Border>
+                              <Style>None</Style>
+                            </Border>
+                            <BottomBorder>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </BottomBorder>
+                          </Style>
+                        </Image>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="SQLServer">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!SQLServer.Value</Value>
+                                  <Style>
+                                    <FontSize>9pt</FontSize>
+                                    <TextDecoration>Underline</TextDecoration>
+                                    <Color>Blue</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>SQLServer</rd:DefaultName>
+                          <ActionInfo>
+                            <Actions>
+                              <Action>
+                                <Drillthrough>
+                                  <ReportName>QuickOverview</ReportName>
+                                  <Parameters>
+                                    <Parameter Name="SQLServer">
+                                      <Value>=Fields!SQLServer.Value</Value>
+                                    </Parameter>
+                                  </Parameters>
+                                </Drillthrough>
+                              </Action>
+                            </Actions>
+                          </ActionInfo>
+                          <ToolTip>SQL Configuration &amp; Performance</ToolTip>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                            </Border>
+                            <BottomBorder>
+                              <Style>Solid</Style>
+                            </BottomBorder>
+                            <FontFamily />
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="SQLDescription">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!SQLDescription.Value</Value>
+                                  <Style>
+                                    <FontSize>9pt</FontSize>
+                                    <Color>#333333</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>SQLDescription</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                            </Border>
+                            <BottomBorder>
+                              <Style>Solid</Style>
+                            </BottomBorder>
+                            <FontFamily />
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+              </TablixRows>
+            </TablixBody>
+            <TablixColumnHierarchy>
+              <TablixMembers>
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+              </TablixMembers>
+            </TablixColumnHierarchy>
+            <TablixRowHierarchy>
+              <TablixMembers>
+                <TablixMember>
+                  <KeepWithGroup>After</KeepWithGroup>
+                  <RepeatOnNewPage>true</RepeatOnNewPage>
+                  <KeepTogether>true</KeepTogether>
+                </TablixMember>
+                <TablixMember>
+                  <Group Name="table1_Details_Group">
+                    <DataElementName>Detail</DataElementName>
+                  </Group>
+                  <TablixMembers>
+                    <TablixMember />
+                  </TablixMembers>
+                  <DataElementName>Detail_Collection</DataElementName>
+                  <DataElementOutput>Output</DataElementOutput>
+                  <KeepTogether>true</KeepTogether>
+                </TablixMember>
+              </TablixMembers>
+            </TablixRowHierarchy>
+            <DataSetName>DataSet1</DataSetName>
+            <Top>0.43in</Top>
+            <Height>0.42833in</Height>
+            <Width>15.97917in</Width>
+            <Style />
+          </Tablix>
+          <Textbox Name="Textbox8">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>= cstr(CountRows("DataSet1"))+" Servers found using the following search argument (like): "+Parameters!Search.Value</Value>
+                    <Style>
+                      <FontSize>11pt</FontSize>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox8</rd:DefaultName>
+            <Top>0.06944in</Top>
+            <Height>0.25in</Height>
+            <Width>6.21875in</Width>
+            <ZIndex>1</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+        </ReportItems>
+        <Height>2.13083in</Height>
+        <Style />
+      </Body>
+      <Width>19.16667in</Width>
+      <Page>
+        <PageHeader>
+          <Height>0.47917in</Height>
+          <PrintOnFirstPage>true</PrintOnFirstPage>
+          <PrintOnLastPage>true</PrintOnLastPage>
+          <ReportItems>
+            <Textbox Name="textbox1">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>CMS Finder</Value>
+                      <Style>
+                        <FontFamily>Segoe UI Light</FontFamily>
+                        <FontSize>24pt</FontSize>
+                        <FontWeight>Bold</FontWeight>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style />
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>textbox1</rd:DefaultName>
+              <Height>0.43in</Height>
+              <Width>3.63542in</Width>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>WhiteSmoke</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+          </ReportItems>
+          <Style>
+            <Border>
+              <Style>None</Style>
+            </Border>
+            <BackgroundColor>WhiteSmoke</BackgroundColor>
+          </Style>
+        </PageHeader>
+        <PageFooter>
+          <Height>0.42708in</Height>
+          <PrintOnFirstPage>true</PrintOnFirstPage>
+          <PrintOnLastPage>true</PrintOnLastPage>
+          <ReportItems>
+            <Textbox Name="Textbox7">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>="CMS Server: "+First(Fields!SQL.Value, "DataSet1")</Value>
+                      <Style>
+                        <FontFamily>Segoe UI Semilight</FontFamily>
+                        <Color>Silver</Color>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style />
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>Textbox7</rd:DefaultName>
+              <Top>0.06944in</Top>
+              <Height>0.25in</Height>
+              <Width>3.1875in</Width>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+          </ReportItems>
+          <Style>
+            <Border>
+              <Style>None</Style>
+            </Border>
+          </Style>
+        </PageFooter>
+        <LeftMargin>1in</LeftMargin>
+        <RightMargin>1in</RightMargin>
+        <TopMargin>1in</TopMargin>
+        <BottomMargin>1in</BottomMargin>
+        <Style />
+      </Page>
+    </ReportSection>
+  </ReportSections>
+  <ReportParameters>
+    <ReportParameter Name="CMSServer">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>NLC1PDB002</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>Name of CMS server :</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="Search">
+      <DataType>String</DataType>
+      <Prompt>Provide a part of SQL server name (% for all): </Prompt>
+    </ReportParameter>
+  </ReportParameters>
+  <ReportParametersLayout>
+    <GridLayoutDefinition>
+      <NumberOfColumns>4</NumberOfColumns>
+      <NumberOfRows>2</NumberOfRows>
+      <CellDefinitions>
+        <CellDefinition>
+          <ColumnIndex>1</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>Search</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>0</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>CMSServer</ParameterName>
+        </CellDefinition>
+      </CellDefinitions>
+    </GridLayoutDefinition>
+  </ReportParametersLayout>
+  <EmbeddedImages>
+    <EmbeddedImage Name="settings_icon21">
+      <MIMEType>image/png</MIMEType>
+      <ImageData>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</ImageData>
+    </EmbeddedImage>
+  </EmbeddedImages>
+  <Language>en-US</Language>
+  <ConsumeContainerWhitespace>true</ConsumeContainerWhitespace>
+  <rd:ReportUnitType>Inch</rd:ReportUnitType>
+  <rd:ReportID>d37fcffa-594c-4404-be71-8ac1a43b3948</rd:ReportID>
+</Report>

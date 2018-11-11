@@ -1,0 +1,664 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2008/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner">
+  <Body>
+    <ReportItems>
+      <Chart Name="Chart1">
+        <ChartCategoryHierarchy>
+          <ChartMembers>
+            <ChartMember>
+              <Group Name="Chart1_CategoryGroup">
+                <GroupExpressions>
+                  <GroupExpression>=Fields!date.Value</GroupExpression>
+                </GroupExpressions>
+              </Group>
+              <SortExpressions>
+                <SortExpression>
+                  <Value>=Fields!date.Value</Value>
+                </SortExpression>
+              </SortExpressions>
+              <Label>=Fields!date.Value</Label>
+            </ChartMember>
+          </ChartMembers>
+        </ChartCategoryHierarchy>
+        <ChartSeriesHierarchy>
+          <ChartMembers>
+            <ChartMember>
+              <Label>logins per hour</Label>
+            </ChartMember>
+          </ChartMembers>
+        </ChartSeriesHierarchy>
+        <ChartData>
+          <ChartSeriesCollection>
+            <ChartSeries Name="logins_per_hour">
+              <ChartDataPoints>
+                <ChartDataPoint>
+                  <ChartDataPointValues>
+                    <Y>=Sum(Fields!logins_per_hour.Value)</Y>
+                  </ChartDataPointValues>
+                  <ChartDataLabel>
+                    <Style />
+                    <UseValueAsLabel>true</UseValueAsLabel>
+                    <Visible>true</Visible>
+                  </ChartDataLabel>
+                  <ToolTip>=format(Fields!date.Value,"dd MMM yyyy HH:mm")  &amp; " : " &amp; cstr(Fields!logins_per_hour.Value) &amp; chr(10) &amp;
+"*** Per minute ** " &amp; chr(10) &amp;
+"Min: " &amp; cstr(Fields!min_per_minute.Value) &amp; chr(10) &amp;
+"Max: " &amp; cstr(Fields!max_per_minute.Value) &amp; chr(10) &amp;
+"Avg: " &amp; cstr(Fields!avg_per_minute.Value)</ToolTip>
+                  <Style>
+                    <Color>=iif(Fields!logins_per_hour.Value&gt;Avg(Fields!logins_per_hour.Value, "dsLogins"), "Tomato","Automatic")</Color>
+                  </Style>
+                  <ChartMarker>
+                    <Style />
+                  </ChartMarker>
+                  <DataElementOutput>Output</DataElementOutput>
+                </ChartDataPoint>
+              </ChartDataPoints>
+              <Style />
+              <ChartEmptyPoints>
+                <Style />
+                <ChartMarker>
+                  <Style />
+                </ChartMarker>
+                <ChartDataLabel>
+                  <Style />
+                </ChartDataLabel>
+              </ChartEmptyPoints>
+              <ValueAxisName>Primary</ValueAxisName>
+              <CategoryAxisName>Primary</CategoryAxisName>
+              <ChartSmartLabel>
+                <CalloutLineColor>Black</CalloutLineColor>
+                <MinMovingDistance>0pt</MinMovingDistance>
+              </ChartSmartLabel>
+            </ChartSeries>
+          </ChartSeriesCollection>
+        </ChartData>
+        <ChartAreas>
+          <ChartArea Name="Default">
+            <ChartCategoryAxes>
+              <ChartAxis Name="Primary">
+                <Style>
+                  <FontSize>8pt</FontSize>
+                  <Format>H:mm</Format>
+                </Style>
+                <ChartAxisTitle>
+                  <Caption />
+                  <Style>
+                    <FontSize>8pt</FontSize>
+                  </Style>
+                </ChartAxisTitle>
+                <Interval>1</Interval>
+                <IntervalType>Default</IntervalType>
+                <ChartMajorGridLines>
+                  <Enabled>False</Enabled>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                    </Border>
+                  </Style>
+                </ChartMajorGridLines>
+                <ChartMinorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                      <Style>Dotted</Style>
+                    </Border>
+                  </Style>
+                </ChartMinorGridLines>
+                <ChartMinorTickMarks>
+                  <Length>0.5</Length>
+                </ChartMinorTickMarks>
+                <CrossAt>NaN</CrossAt>
+                <Minimum>NaN</Minimum>
+                <Maximum>NaN</Maximum>
+                <ChartAxisScaleBreak>
+                  <Style />
+                </ChartAxisScaleBreak>
+              </ChartAxis>
+              <ChartAxis Name="Secondary">
+                <Style>
+                  <FontSize>8pt</FontSize>
+                </Style>
+                <ChartAxisTitle>
+                  <Caption>Axis Title</Caption>
+                  <Style>
+                    <FontSize>8pt</FontSize>
+                  </Style>
+                </ChartAxisTitle>
+                <ChartMajorGridLines>
+                  <Enabled>False</Enabled>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                    </Border>
+                  </Style>
+                </ChartMajorGridLines>
+                <ChartMinorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                      <Style>Dotted</Style>
+                    </Border>
+                  </Style>
+                </ChartMinorGridLines>
+                <ChartMinorTickMarks>
+                  <Length>0.5</Length>
+                </ChartMinorTickMarks>
+                <CrossAt>NaN</CrossAt>
+                <Location>Opposite</Location>
+                <Minimum>NaN</Minimum>
+                <Maximum>NaN</Maximum>
+                <ChartAxisScaleBreak>
+                  <Style />
+                </ChartAxisScaleBreak>
+              </ChartAxis>
+            </ChartCategoryAxes>
+            <ChartValueAxes>
+              <ChartAxis Name="Primary">
+                <Visible>False</Visible>
+                <Style>
+                  <FontSize>8pt</FontSize>
+                </Style>
+                <ChartAxisTitle>
+                  <Caption />
+                  <Style>
+                    <FontSize>8pt</FontSize>
+                  </Style>
+                </ChartAxisTitle>
+                <ChartMajorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                    </Border>
+                  </Style>
+                </ChartMajorGridLines>
+                <ChartMinorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                      <Style>Dotted</Style>
+                    </Border>
+                  </Style>
+                </ChartMinorGridLines>
+                <ChartMinorTickMarks>
+                  <Length>0.5</Length>
+                </ChartMinorTickMarks>
+                <CrossAt>NaN</CrossAt>
+                <Minimum>NaN</Minimum>
+                <Maximum>NaN</Maximum>
+                <ChartAxisScaleBreak>
+                  <Style />
+                </ChartAxisScaleBreak>
+              </ChartAxis>
+              <ChartAxis Name="Secondary">
+                <Style>
+                  <FontSize>8pt</FontSize>
+                </Style>
+                <ChartAxisTitle>
+                  <Caption>Axis Title</Caption>
+                  <Style>
+                    <FontSize>8pt</FontSize>
+                  </Style>
+                </ChartAxisTitle>
+                <ChartMajorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                    </Border>
+                  </Style>
+                </ChartMajorGridLines>
+                <ChartMinorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                      <Style>Dotted</Style>
+                    </Border>
+                  </Style>
+                </ChartMinorGridLines>
+                <ChartMinorTickMarks>
+                  <Length>0.5</Length>
+                </ChartMinorTickMarks>
+                <CrossAt>NaN</CrossAt>
+                <Location>Opposite</Location>
+                <Minimum>NaN</Minimum>
+                <Maximum>NaN</Maximum>
+                <ChartAxisScaleBreak>
+                  <Style />
+                </ChartAxisScaleBreak>
+              </ChartAxis>
+            </ChartValueAxes>
+            <Style>
+              <BackgroundGradientType>None</BackgroundGradientType>
+            </Style>
+          </ChartArea>
+        </ChartAreas>
+        <ChartTitles>
+          <ChartTitle Name="Default">
+            <Caption>Successful Logins today</Caption>
+            <Style>
+              <BackgroundGradientType>None</BackgroundGradientType>
+              <FontWeight>Bold</FontWeight>
+              <TextAlign>General</TextAlign>
+              <VerticalAlign>Top</VerticalAlign>
+            </Style>
+          </ChartTitle>
+        </ChartTitles>
+        <Palette>BrightPastel</Palette>
+        <ChartBorderSkin>
+          <Style>
+            <BackgroundColor>Gray</BackgroundColor>
+            <BackgroundGradientType>None</BackgroundGradientType>
+            <Color>White</Color>
+          </Style>
+        </ChartBorderSkin>
+        <ChartNoDataMessage Name="NoDataMessage">
+          <Caption>No Data Available</Caption>
+          <Style>
+            <BackgroundGradientType>None</BackgroundGradientType>
+            <TextAlign>General</TextAlign>
+            <VerticalAlign>Top</VerticalAlign>
+          </Style>
+        </ChartNoDataMessage>
+        <DataSetName>dsLogins</DataSetName>
+        <Top>0.23958in</Top>
+        <Left>0.13417in</Left>
+        <Height>2.59375in</Height>
+        <Width>13.07069in</Width>
+        <Style>
+          <Border>
+            <Color>LightGrey</Color>
+            <Style>Solid</Style>
+          </Border>
+          <BackgroundColor>White</BackgroundColor>
+          <BackgroundGradientType>None</BackgroundGradientType>
+        </Style>
+      </Chart>
+    </ReportItems>
+    <Height>5.34375in</Height>
+    <Style />
+  </Body>
+  <Width>16.47916in</Width>
+  <Page>
+    <PageHeader>
+      <Height>0.66542in</Height>
+      <PrintOnFirstPage>true</PrintOnFirstPage>
+      <PrintOnLastPage>true</PrintOnLastPage>
+      <ReportItems>
+        <Image Name="Logo">
+          <Source>Embedded</Source>
+          <Value>rabobanklogo</Value>
+          <Sizing>FitProportional</Sizing>
+          <ActionInfo>
+            <Actions>
+              <Action>
+                <Drillthrough>
+                  <ReportName>QuickOverview</ReportName>
+                  <Parameters>
+                    <Parameter Name="SQLServer">
+                      <Value>=Parameters!SQLServer.Value</Value>
+                    </Parameter>
+                  </Parameters>
+                </Drillthrough>
+              </Action>
+            </Actions>
+          </ActionInfo>
+          <Height>0.62153in</Height>
+          <Width>0.80208in</Width>
+          <Style>
+            <Border>
+              <Style>None</Style>
+            </Border>
+          </Style>
+        </Image>
+        <Textbox Name="Textbox29">
+          <CanGrow>true</CanGrow>
+          <KeepTogether>true</KeepTogether>
+          <Paragraphs>
+            <Paragraph>
+              <TextRuns>
+                <TextRun>
+                  <Value>SQL Server :</Value>
+                  <Style>
+                    <FontSize>12pt</FontSize>
+                    <FontWeight>Bold</FontWeight>
+                  </Style>
+                </TextRun>
+              </TextRuns>
+              <Style>
+                <TextAlign>Right</TextAlign>
+              </Style>
+            </Paragraph>
+          </Paragraphs>
+          <rd:DefaultName>Textbox29</rd:DefaultName>
+          <Top>0.11806in</Top>
+          <Left>0.87153in</Left>
+          <Height>0.25in</Height>
+          <Width>1.34028in</Width>
+          <ZIndex>1</ZIndex>
+          <Style>
+            <Border>
+              <Style>None</Style>
+            </Border>
+            <BackgroundColor>Orange</BackgroundColor>
+            <PaddingLeft>2pt</PaddingLeft>
+            <PaddingRight>2pt</PaddingRight>
+            <PaddingTop>2pt</PaddingTop>
+            <PaddingBottom>2pt</PaddingBottom>
+          </Style>
+        </Textbox>
+        <Textbox Name="SQLServer">
+          <CanGrow>true</CanGrow>
+          <KeepTogether>true</KeepTogether>
+          <Paragraphs>
+            <Paragraph>
+              <TextRuns>
+                <TextRun>
+                  <Value>=Parameters!SQLServer.Value</Value>
+                  <Style>
+                    <FontSize>12pt</FontSize>
+                    <FontWeight>Bold</FontWeight>
+                  </Style>
+                </TextRun>
+              </TextRuns>
+              <Style />
+            </Paragraph>
+          </Paragraphs>
+          <rd:DefaultName>SQLServer</rd:DefaultName>
+          <Top>0.11806in</Top>
+          <Left>2.32986in</Left>
+          <Height>0.25in</Height>
+          <Width>4.04167in</Width>
+          <ZIndex>2</ZIndex>
+          <Style>
+            <Border>
+              <Style>None</Style>
+            </Border>
+            <BackgroundColor>Orange</BackgroundColor>
+            <PaddingLeft>2pt</PaddingLeft>
+            <PaddingRight>2pt</PaddingRight>
+            <PaddingTop>2pt</PaddingTop>
+            <PaddingBottom>2pt</PaddingBottom>
+          </Style>
+        </Textbox>
+        <Textbox Name="txtReportCreated">
+          <CanGrow>true</CanGrow>
+          <KeepTogether>true</KeepTogether>
+          <Paragraphs>
+            <Paragraph>
+              <TextRuns>
+                <TextRun>
+                  <Value>= "Report created: "
+  + cstr(datepart(DateInterval.Day,globals!ExecutionTime))+ " "
+  + monthname(datepart(DateInterval.Month,globals!ExecutionTime),false)+ " "
+  + cstr(datepart(DateInterval.Year,globals!ExecutionTime)) + " "
+  + FormatDateTime(globals!ExecutionTime,dateformat.ShortTime)+":"
+  + right(cstr(100+datepart(DateInterval.Second,globals!ExecutionTime)),2)</Value>
+                  <Style>
+                    <FontWeight>Bold</FontWeight>
+                    <Color>Silver</Color>
+                  </Style>
+                </TextRun>
+              </TextRuns>
+              <Style>
+                <TextAlign>Right</TextAlign>
+              </Style>
+            </Paragraph>
+          </Paragraphs>
+          <Top>0.05209in</Top>
+          <Left>10.29861in</Left>
+          <Height>0.25in</Height>
+          <Width>2.90625in</Width>
+          <ZIndex>3</ZIndex>
+          <Style>
+            <Border>
+              <Style>None</Style>
+            </Border>
+            <BackgroundColor>Gray</BackgroundColor>
+            <PaddingLeft>2pt</PaddingLeft>
+            <PaddingRight>2pt</PaddingRight>
+            <PaddingTop>2pt</PaddingTop>
+            <PaddingBottom>2pt</PaddingBottom>
+          </Style>
+        </Textbox>
+        <Textbox Name="txtReportPages">
+          <CanGrow>true</CanGrow>
+          <KeepTogether>true</KeepTogether>
+          <Paragraphs>
+            <Paragraph>
+              <TextRuns>
+                <TextRun>
+                  <Value>="Page " &amp; Globals!PageNumber &amp; " of " &amp; Globals!TotalPages</Value>
+                  <Style>
+                    <FontWeight>Bold</FontWeight>
+                    <Color>Silver</Color>
+                  </Style>
+                </TextRun>
+              </TextRuns>
+              <Style>
+                <TextAlign>Right</TextAlign>
+              </Style>
+            </Paragraph>
+          </Paragraphs>
+          <Top>0.31597in</Top>
+          <Left>10.29861in</Left>
+          <Height>0.25in</Height>
+          <Width>2.90625in</Width>
+          <ZIndex>4</ZIndex>
+          <Style>
+            <Border>
+              <Style>None</Style>
+            </Border>
+            <BackgroundColor>Gray</BackgroundColor>
+            <PaddingLeft>2pt</PaddingLeft>
+            <PaddingRight>2pt</PaddingRight>
+            <PaddingTop>2pt</PaddingTop>
+            <PaddingBottom>2pt</PaddingBottom>
+          </Style>
+        </Textbox>
+      </ReportItems>
+      <Style>
+        <Border>
+          <Style>None</Style>
+        </Border>
+        <BackgroundColor>WhiteSmoke</BackgroundColor>
+      </Style>
+    </PageHeader>
+    <LeftMargin>1in</LeftMargin>
+    <RightMargin>1in</RightMargin>
+    <TopMargin>1in</TopMargin>
+    <BottomMargin>1in</BottomMargin>
+    <Style />
+  </Page>
+  <AutoRefresh>0</AutoRefresh>
+  <DataSources>
+    <DataSource Name="DataSource1">
+      <ConnectionProperties>
+        <DataProvider>SQL</DataProvider>
+        <ConnectString>Data Source=EURV131002\DBA_PRD_01</ConnectString>
+        <IntegratedSecurity>true</IntegratedSecurity>
+      </ConnectionProperties>
+      <rd:SecurityType>Integrated</rd:SecurityType>
+      <rd:DataSourceID>063104f1-09b0-48ad-9077-24cecd7ef539</rd:DataSourceID>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="dsLogins">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <CommandText>declare @last_date smalldatetime  -- last date 
+declare @logs table (i int,dt varchar(20),log_size int)  -- to get amount of errorlogs
+declare @lc smallint  -- count amount of errorlogs
+
+declare @i smallint				-- counter for xp_readerrorlog
+declare @start smalldatetime	-- start month
+declare @end smalldatetime		-- end month
+
+/*check and create table if absent*/
+if object_id('tempdb.dbo.login_errorlogs_filtered') is null
+    CREATE TABLE tempdb.dbo.login_errorlogs_filtered
+  ( 
+     logdate      DATETIME, 
+     processinfo  VARCHAR(200), 
+     errorlogtext VARCHAR(max) 
+  ) 
+
+/* read errorlogs only for specified month */
+select @start=dateadd(dd,datediff(dd,'20100101',getdate()),'20100101')
+--select @start=dateadd(mm,datediff(mm,'20100101','20161201'),'20100101')
+select @end=dateadd(dd,1,@start)
+
+/*get the date of the last record*/
+select @last_date=isnull(max(logdate),0) 
+from tempdb.dbo.login_errorlogs_filtered
+where logdate between @start and @end 
+
+
+/*count errorlogs*/
+insert into @logs (i,dt,log_size)
+exec xp_enumerrorlogs
+--select @lc=@@rowcount
+
+
+
+select @last_date = case 
+						when @last_date&lt;@start then @start 
+						else @last_date end 
+
+
+/*calculate how many logs to read taking into account existing records in tempdb table*/
+--select @lc
+----select @lc=case	
+----			when datediff(dd,@last_date,getdate())&gt;0 and datediff(dd,@last_date,getdate())&gt;@lc then @lc
+----			when datediff(dd,@last_date,getdate())=0 then 1
+----			else datediff(dd,@last_date,getdate()) end
+----print @lc
+------select @lc
+----select @i=0
+--print @start
+--print @end
+
+declare @dont_run tinyint
+select @dont_run=0
+
+ while exists (select top 1 1 from @logs where [dt] between @last_date and @end) or ((datediff(mi,@last_date,getdate()) between 0 and 20) and @dont_run=0)
+	begin
+
+		select top 1 @i=i from @logs where [dt] between @last_date and @end
+		if @i is null 
+			begin
+				select @i=isnull(@i,0)  -- read last log anyway if we analyze current period
+				select @dont_run=1
+			end 
+		print 'current_log:'+convert(varchar(10),@i) 
+		insert into tempdb.dbo.login_errorlogs_filtered(logdate,processinfo,errorlogtext)
+		--exec master.dbo.xp_readerrorlog @i, 1, N'login' --, null, '20140517', '20140518','desc'
+		--exec master.dbo.xp_readerrorlog @i, 1, N'login', null, @start, @end--,'desc'
+		exec master.dbo.xp_readerrorlog @i, 1, N'login', null, @last_date, @end
+
+		--select @i=@i+1
+		delete @logs where i=@i
+		-- ?
+		if datediff(mi,@last_date,getdate())&lt;20 select @last_date=getdate()
+	end
+
+--drop table tempdb.dbo.login_errorlogs_filtered
+
+;with data as (
+select 
+ dateadd(mi,datediff(mi,'20100101',logdate),'20100101') [dt]
+,count(1) [logins]
+from tempdb.dbo.login_errorlogs_filtered
+group by 
+dateadd(mi,datediff(mi,'20100101',logdate),'20100101'))
+select 
+dateadd(hh,datediff(hh,'20100101',dt),'20100101') [date]
+,min(logins) [min per minute]
+
+,AVG(logins) [avg per minute]
+,max(logins) [max per minute]
+,sum(logins) [logins per hour]
+,count(1) [busy minutes]
+from data
+group by dateadd(hh,datediff(hh,'20100101',dt),'20100101')
+order by 1 desc</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="date">
+          <DataField>date</DataField>
+          <rd:TypeName>System.DateTime</rd:TypeName>
+        </Field>
+        <Field Name="min_per_minute">
+          <DataField>min per minute</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="avg_per_minute">
+          <DataField>avg per minute</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="max_per_minute">
+          <DataField>max per minute</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="logins_per_hour">
+          <DataField>logins per hour</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="busy_minutes">
+          <DataField>busy minutes</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="dsLoginAuthHost">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <CommandText>with data as (
+select 
+	--replace(errorlogtext,'Login succeeded for user ''','|'),
+	--replace(replace(errorlogtext,'Login succeeded for user ''',''),'''. Connection made using ','|'),
+	--replace(replace(replace(errorlogtext,'Login succeeded for user ''',''),'''. Connection made using ','|'),'. [CLIENT: ','|'),
+	replace(replace(replace(replace(errorlogtext,'Login succeeded for user ''',''),'''. Connection made using ','|'),'. [CLIENT: ','|'),']','') d
+	,logdate
+from tempdb.dbo.login_errorlogs_filtered
+)
+select 
+	dateadd(hh,datediff(hh,'20100101',logdate),'20100101')
+	,left(d.d,charindex('|',d.d,1)-1) [Login]
+	,replace(replace(d.d,left(d.d,charindex('|',d.d,1)-1)+'|',''),'|'+reverse(left(reverse(d.d),charindex('|',reverse(d.d),1)-1)),'') [Authentication]
+	,reverse(left(reverse(d.d),charindex('|',reverse(d.d),1)-1)) [Host]
+	,count(1) [Connections]
+from data d
+group by dateadd(hh,datediff(hh,'20100101',logdate),'20100101'),
+	left(d.d,charindex('|',d.d,1)-1),
+	replace(replace(d.d,left(d.d,charindex('|',d.d,1)-1)+'|',''),'|'+reverse(left(reverse(d.d),charindex('|',reverse(d.d),1)-1)),''),
+	reverse(left(reverse(d.d),charindex('|',reverse(d.d),1)-1))
+order by 1 
+</CommandText>
+      </Query>
+    </DataSet>
+  </DataSets>
+  <ReportParameters>
+    <ReportParameter Name="SQLServer">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>BXTS131056\CRIS_PRD_01</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>SQLServer</Prompt>
+      <Hidden>true</Hidden>
+    </ReportParameter>
+  </ReportParameters>
+  <EmbeddedImages>
+    <EmbeddedImage Name="rabobanklogo">
+      <MIMEType>image/gif</MIMEType>
+      <ImageData>R0lGODlhQABNAPcAAJ0rJPmjCWqBuuF2S/epKlh2tvq6RYuKrPvt5GV6s/u1Nwk1lIaayfvGZOVjAzZZpvzJduiRaP3Sh+JbBdlGBve1V9Y7BwEukNPb63NDUpmr09FPL/zDR+vr8kpJbrmqsPC0jPp7AQAXiVgmSuyJKbzI4uY0Bf706eri5eNtM/3Sed3i8Cw5i/zHVsLN5UZmrfipMsl6F1Zqqf7nsLG+3Pbl2/qtHN1SB32TxUdUlyZBlGhulvvKgRMld8nR5mo0S/PDl0YyarOWYRA7l7fD3mJPZTonZb1xR9HO3ZVtN9/Q0au62hlCm6Kx1fuzLDNLmOiDOMeOHsm4uPy9LPOaHwAhjfL0+emKRe18AC1ToyVNoLZoGPSZBU5BTcrJ2vSpWuHm8uylaPy2InWNw/j5/Ox0APCDAObq9OqGC/jSsO3IwP/68+6WSJWmzqKcrf25I/GKAdknCP7x1wAghfywGvOeO/OUATUsWPPy9vqrEs6NT/3bmP339E9vsu2RNfWeCho2jrWzxvW1aM0jBfzAOtPU5I2hzfz5+a6qwUhdoPzowdvIxvCRJfelEPr5+uJIBePa4PjAe/yUAIlZTfWKFSUmZjczeux/E/GLC/f4++zv9/WnP/SSC/3PaTg4Xvz9/v2KAdxVF6NMKuKZGZJQLxUvhwAcgNfe7b4tE+1bFWhdf/2GAPDd1EYgToBRZTpRmP78+aW12P+dArZaGDEqdg8ujOp4EPShHwEnjd1lFwsqhvLu8iMjdP///wcjgjxfqv7+///+/v///vv7/f/+/fv7/DA9crt/ePNwHdeRa+LAiPlfB3FPQTMgXkg9eiEaY9i6hux/KfmRPVpjm7y7zf79/cRCGtFaDRIuod9CGf39/p2v1OCAO+isLdthQ/epHvaiEP+lGSQ/pqhdTWN2wtIvC//SRv7xza+31eiLYuuYVfyCSvZiEPaUWc/X6uhuAehzDvaNVuB9Cfj2+LJgLOp9
+DvKdef+wB/GtfN9ZKi0wYunYz4Q1M/DUyG6Hv3hlSiH5BAAAAAAALAAAAABAAE0AQAj/AHsJHEiwoMGDCBMqXMiwYS9iUmqJwEVxjogEfBxq3Fjw04dXNXpRqzUHl6knKIQhedWBo8uX856YmmMK3cubBIUJm9FiihgxHFoQcmLjW6M/eTz0iCGLExdPRY7EMPOu3pU0OAsKI3aC0BsxdMSosJGnEbg/f7jYgdHgFgEeMLBUiESCkSASDiZcE/UjiBEjlv7+9YAHJ7BM5DyMCsCFCxw4FSpgolLhS506fkiQiBYNCpQrVyKky5ctgrdB5crFiQOAl6GsDXWeomFIQAIZL2ToTuCvDREwOmH3+nQGjHFNCYFhWOKu4akmGG76oAGmIJELv3phGLLgzKksCwoU/8C+4sWF6BgWMGEwhMmZXpoeXNiWhYmPXj7Ua6gvYPwLMFlcsEIvJVxQwClaDIGDFgvEIhxCsESEywGwPGghQbC4gUsOteAyRxWInJCIDrtceBMwCEiRkUDAQCKTKQkUpk0OApj4ICxryDBHIDmK0ISNCZ3j1VcqEJLHkQEw9kcDLSjQwg6mlKIHDBVsUkYZIbzzAy+tHCHNDfz84AoKsK0ghDmdGOBEAAZIkJYBt8BhhpxmUPWFIn44oOcEN9xAQQoDPAKAKhkAsIE3A3jjihUPCuPOC1VU4QkzW2AZQhnv5DVBLkD4SUE2Fpgg6iAAjPDMTAK8B+SqLg2DwwWv9f/C4BLDbPNCFlmMYUUJQ1zwQBYvlCDQCgJkocULRPTiwgVD4NqHC/AZ8osWuQLjQh+1ZfHAaxpckEAvNGTxLasskmshLB+IIAJI5goHCwI7iPCEFDVU2C5HwiAwTRUUeciCDoCQea9DaxwgAiKLAFLFHLV40QskpSRQzMAK1ZCIG8T0IgwKOujgiymAFCLQAQxQrJEwhzxgiik6DNiLIyZrBAwegPgigAymMDBMzAfJsYcKnTiRhw1FieGB
+KUXcE0AMPYgjhARymKuTIuZMMUULEnBARx4K7NEJAWfZAQETXUgCx2QQhMGMERno8UU0E0wQTT/CbTVDUEKpMIWTEKj/IIEEEDQAgw2jMNNFEvJsMUkRlrDguDMeOBOYM66MM84RG6iBkzByvEHH1jZAwMEfR60lwR5VwoEFJpEwEkmm8FyhThr45EIBBY88Es8ApbbSjDMtvSQMLDgkcQ84Z/1hBwENVMBJnWZggQWmlwCxJ59+WhBKBBHkkxoqAITfTBPAwBYMEdjokgQc4ajACBbRY/FOpnxOEMbtFFiQvwUWlDPIBvbIBipG4IsnuMxEwdDGGQyRBV9Eyhe+6EEl9HGHClawEpXogS/mMAdf6CIRTUAOz0ZIQpwUiAn+6MMFFgAtgwxDPvdZyBkesABhueQM7RHhQDQRoAv48AXN6QUY/6ygiV9coAQMuIAAgHEKJlzABQIw0M5U2IQk4uATK+BOsjShCStogQnuGIMUz8AgDIxHAEN4wAHHgwOBsPFVOFiCFi4wBhcsgI5j4A4NMjHHMRjCiW1Y1gLGMIYF1DABF8BBE5zIABpcoA9W+EQUY9EEAwmRCUM4BatqsIMcfGANJdSIGyI1DQSUL5QMOcEOquAGe6EyISeQwjQoUgV5KeGVB+HDASLVL1yIIAemxCVB9qEDflFEBAdAhC8QsTNhCoMVLHiCGxRWhYYFIxC+CIQwe1EDHUzjBEqoxcLmcIBPOCIBOijMK1mxAyVUQySl4JcpaoGEl8kACacs4SKewP+KgcDiAEygSQ5aUowXCOCd2xTIIRJBExl0IBi9aIMXIJrQXsSEJrqoZ0ULsgsdMMwUDt0oQbTxAF8QgRoiKAVwhHkCRcxgD4FrgAdEoAoJQMMYOigERWMGixl0ghA/UYEBCKEmJzjhaP/IAwHooJR6gIIEX8CKueSgAhX0hAMNIIQCbNCIAJyFCwp4gD7sYAdQbAEqtChCHShhCz+wIQwIsNEMCDGFN0zh
+p3mggw0C4IQ9SMAABHCCMnrQhW/AwAA8iMSlMsALI3iJT/xwhUZhs4ZOmIMDV+tEWJyggM4qgAAKaEDhRGAKWgShCITKwCTokQtRBIEWI0gGMpbBjlT/pGNFN6nsG3YrFr0W5RvfIMA3btEmKshpFasIQR2AwI1ZkKIvtBAMYATTigPg1iWd+8rWJMBVsyiPCy2AgAIEsYlNCOISrWPDF9gQiSvUz08AyIAHmiGYIOxipxxBQTfeYIAWNEABEviGHf4AYB4YF3pYiEQFBOEA+jkgBSDARwrylw97pGIdA7BGfPGA341oYgeeC8AfwMEFxBJgTo+pk/Te4QcEwON6fdpfCo7xgxGMoBWtCEIQEpCJrLjAGFG4B1rUYgdOzKUCVEDD9Ob3DhLErU83CEUK0mGPAaQmNathDQsOiJNTiAPIspCEkXnACeldqR4kcCsb1AGaAaQg/xT8618+QHCa1QCgBzLQhDAsRANxSCoJaECumee3J07F+Hb8K0eo4mCNHzRjDq+IDpA0YQhqlsITXSDFLK4Rtwmkoh2545+G+dEKXnxsDk9AR4/vRYYS+OMBgKiFLjjIwZnQ2helAEQicCCy4JBQJ8EBNjB0Qow9i/TYyN7oCrLAnQU8oA35LIgKS7aQTCAyVhz5BINsSJBKJgAY2ggQtXthhVWvgEFnYFRBrKAqIQ5BCxggg0E6oG6CWEHeynL2J3qRieqQ2zyGAIM/sJMJHzDhF3m8AA2WcMc+GDELKwDDHA26gCGsYAkr7IN8tGAFFzDhBQyouDsM4cM+DHwBGLp4lW+cHcRTVLwAAcJB+VawjQL0QT3uiOIShBggDcwxWb1QYRsKsIAtMqHoKzBEH8wDcRVCy+UPAIMRfciAiQmE5AXQRi9oGIskboNABkLQAiaGdRq0p8exUE8JFpAF5IjxF+NxUCwu4A+Xa+E9JGcArx7QC4wXYNUvGMKPemGIIQjgFL9YgBZ+MQQNpD3wF9BCLHZWAvBc
+YD3DaMPHnZiFJQDDBzQEFhOa0C0caCMTL2BCCVRO7vEIKyAAOw==</ImageData>
+    </EmbeddedImage>
+  </EmbeddedImages>
+  <rd:ReportUnitType>Inch</rd:ReportUnitType>
+  <rd:ReportID>2df4235d-f200-47c0-9cfa-06345f3a871a</rd:ReportID>
+</Report>

@@ -1,0 +1,1945 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner">
+  <AutoRefresh>0</AutoRefresh>
+  <DataSources>
+    <DataSource Name="DBAInventory">
+      <ConnectionProperties>
+        <DataProvider>SQL</DataProvider>
+        <ConnectString>Data Source=nlams00908;Initial Catalog=DBAInventory</ConnectString>
+        <IntegratedSecurity>true</IntegratedSecurity>
+      </ConnectionProperties>
+      <rd:SecurityType>Integrated</rd:SecurityType>
+      <rd:DataSourceID>5ad070ec-f513-40fb-80ac-3d2ef299530c</rd:DataSourceID>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="dsServers">
+      <Query>
+        <DataSourceName>DBAInventory</DataSourceName>
+        <CommandText>if object_id('tempdb.dbo.Report_CompareServers') is null 
+	   create table tempdb.dbo.Report_CompareServers (dt datetime default getdate(), servername varchar(100))
+/*
+select distinct servername
+from tempdb.dbo.Report_CompareServers
+*/
+SELECT [Instance] [servername]
+  FROM [dbo].[raw_SQLServer]
+  order by 1 </CommandText>
+      </Query>
+      <Fields>
+        <Field Name="servername">
+          <DataField>servername</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="dsConfigurations">
+      <Query>
+        <DataSourceName>DBAInventory</DataSourceName>
+        <QueryParameters>
+          <QueryParameter Name="@show_diff">
+            <Value>=iif(Parameters!show_diff.Value=True,1,0)</Value>
+          </QueryParameter>
+          <QueryParameter Name="@servers">
+            <Value>=Parameters!Servers.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>
+set nocount on
+if object_id('tempdb.dbo.#compare') is not null drop table #compare 
+if object_id('tempdb.dbo.#configurations') is not null drop table #configurations
+
+if object_id('tempdb.dbo.Report_CompareServers') is null 
+   create table tempdb.dbo.Report_CompareServers (dt datetime default getdate(),servername varchar(100))
+
+select servername
+into #compare
+from tempdb.dbo.Report_CompareServers
+where servername in (@servers)
+
+/*
+-- for debug 
+;with data as (select 'NLAMS00304' [servername] union all select 'NLAMS10304')
+select servername 
+into #compare 
+from data 
+*/
+
+create table  #configurations  
+(srv varchar(50) null,src varchar(50),configuration_id int,name nvarchar(35)
+,value sql_variant,value_in_use sql_variant,description nvarchar(255),is_dynamic bit,is_advanced bit)
+
+declare @srv varchar(50)
+declare @cmd varchar(8000)
+declare @addon varchar(100)
+--declare @show_diff int = 1
+
+while exists (select top 1 1 from #compare)
+	begin
+		select top 1 @srv=servername from #compare
+
+		-- (re-)create linked server for data retrieval 
+		exec usp_LinkedServer @srv,'SC_COMPARE_SERVERS'
+
+--------------------------------------------------------  
+		/* SYS.CONFIGURATIONS */
+		select @cmd='if object_id(''tempdb.dbo.configurations'') is not null exec (''drop table tempdb.dbo.configurations''); create table tempdb.dbo.configurations (configuration_id int,name nvarchar(35),value sql_variant,value_in_use sql_variant,description nvarchar(255),is_dynamic bit,is_advanced bit);'+char(10)--+'go'+char(10)
+		select @cmd=@cmd+'insert into tempdb.dbo.configurations (configuration_id,name,value,value_in_use,description,is_dynamic,is_advanced) select configuration_id,name,value,value_in_use,description,is_dynamic,is_advanced from sys.configurations;'
+
+		exec (@cmd) at [SC_COMPARE_SERVERS]
+
+		insert into #configurations(src,configuration_id,name,value,value_in_use,[description],is_dynamic,is_advanced)
+		exec ('select ''sys.configurations'',configuration_id,name,value,value_in_use,description,is_dynamic,is_advanced from [SC_COMPARE_SERVERS].tempdb.dbo.configurations')
+
+		exec('drop table tempdb.dbo.configurations') at [SC_COMPARE_SERVERS]
+
+--------------------------------------------------------  
+		/* prepare temp table for the next queries */
+		select @cmd='if object_id(''tempdb.dbo.dmvs'') is not null exec (''drop table tempdb.dbo.dmvs''); create table tempdb.dbo.dmvs (id int identity,source varchar(50),param varchar(500),val varchar(500));'
+		exec (@cmd) at [SC_COMPARE_SERVERS]
+
+--------------------------------------------------------  
+		/* Authentication and Login auditing */
+		select @cmd=
+		'
+		declare @tbl table (name varchar(50),config_value varchar(50))
+		insert into @tbl (name,config_value)
+		exec xp_loginconfig
+
+
+		insert 
+			into tempdb.dbo.dmvs (source,param,val)
+		select ''Authentication'', name, config_value
+		from @tbl 
+		where name in (''login mode'',''audit level'')
+		'
+
+		exec (@cmd) at [SC_COMPARE_SERVERS]
+
+		insert into #configurations(src,configuration_id,name,value,value_in_use,[description],is_dynamic,is_advanced)
+		exec ('select source,id,param,val,val,'''',0,0 from [SC_COMPARE_SERVERS].tempdb.dbo.dmvs')		 
+
+--------------------------------------------------------  
+		/* DMVs and SERVERPROPERTY() */
+		select @cmd='with os_sys_memory as 
+	(
+	select 
+		convert(varchar(100),total_physical_memory_kb) [total_physical_memory_kb]
+		,convert(varchar(100),available_physical_memory_kb) [available_physical_memory_kb]
+		,convert(varchar(100),total_page_file_kb) [total_page_file_kb]
+		,convert(varchar(100),available_page_file_kb) [available_page_file_kb]
+		,convert(varchar(100),system_memory_state_desc) [system_memory_state_desc]
+	from sys.dm_os_sys_memory
+	)
+, os_windows_info as 
+	(
+	select 
+		convert(varchar(100),windows_release) [windows_release]
+		,convert(varchar(100),windows_service_pack_level) [windows_service_pack_level]
+		,convert(varchar(100),windows_sku) [windows_sku]
+		,convert(varchar(100),os_language_version) [os_language_version]
+	from sys.dm_os_windows_info
+	)
+, os_sys_info as
+	(
+	select 
+		convert(varchar(100),cpu_count) [cpu_count]
+		,convert(varchar(100),hyperthread_ratio) [hyperthread_ratio]
+		--,convert(varchar(100),physical_memory_kb) [physical_memory_kb]
+		--,convert(varchar(100),virtual_memory_kb) [virtual_memory_kb]
+		--,convert(varchar(100),committed_kb) [committed_kb]
+		--,convert(varchar(100),committed_target_kb) [committed_target_kb]
+		--,convert(varchar(100),visible_target_kb) [visible_target_kb]
+		,convert(varchar(100),os_quantum) [os_quantum]
+		,convert(varchar(100),os_error_mode) [os_error_mode]
+		,convert(varchar(100),os_priority_class) [os_priority_class]
+		,convert(varchar(100),max_workers_count) [max_workers_count]
+		,convert(varchar(100),scheduler_count) [scheduler_count]
+		,convert(varchar(100),scheduler_total_count) [scheduler_total_count]
+		,convert(varchar(100),sqlserver_start_time) [sqlserver_start_time]
+		,convert(varchar(100),affinity_type_desc) [affinity_type_desc]
+		,convert(varchar(100),virtual_machine_type_desc) [virtual_machine_type_desc]
+	from sys.dm_os_sys_info 
+	)
+, server_props as 
+	(
+		select convert(varchar(100),SERVERPROPERTY(''MachineName'')) [val], ''MachineName'' [param] union all 
+		select convert(varchar(100),SERVERPROPERTY(''ComputerNamePhysicalNetBIOS'')) [val], ''ComputerNamePhysicalNetBIOS'' [param] union all 
+		select convert(varchar(100),SERVERPROPERTY(''InstanceName'')) [val], ''InstanceName'' [param] union all -- DBA_PRD_01
+
+		select convert(varchar(100),SERVERPROPERTY(''Edition''))   [val], ''Edition'' [param] union all  -- Standard Edition (64-bit)
+		select convert(varchar(100),SERVERPROPERTY(''ProductVersion''))  [val], ''ProductVersion'' [param] union all 
+		select convert(varchar(100),SERVERPROPERTY(''ProductLevel''))  [val], ''ProductLevel'' [param] union all -- SP3
+		select convert(varchar(100),SERVERPROPERTY(''Collation'')) [val], ''Collation'' [param] union all -- SQL_Latin1_General_CP1_CI_AS
+		select convert(varchar(100),case when SERVERPROPERTY(''IsIntegratedSecurityOnly'')=1 then ''Windows'' else ''Mixed'' end)  [val], ''SecurityMode'' [param] union all  -- 0
+
+		select convert(varchar(100),SERVERPROPERTY(''IsClustered''))  [val], ''IsClustered'' [param] union all  -- 0
+		select convert(varchar(100),SERVERPROPERTY(''InstanceDefaultDataPath''))  [val], ''DefaultDataPath'' [param] union all  -- F:\MSSQL$DBA_PRD_01\UserData\
+		select convert(varchar(100),SERVERPROPERTY(''InstanceDefaultLogPath''))  [val], ''DefaultLogPath'' [param] union all -- G:\MSSQL$DBA_PRD_01\UserLog\
+
+
+		select convert(varchar(100),SERVERPROPERTY(''ProductMajorVersion''))  [val], ''ProductMajorVersion'' [param] union all   -- 11
+		select convert(varchar(100),SERVERPROPERTY(''ProductMinorVersion''))  [val], ''ProductMinorVersion'' [param] union all  -- 0
+		select convert(varchar(100),SERVERPROPERTY(''ProductBuild''))  [val], ''ProductBuild'' [param] union all -- 6248
+		select convert(varchar(100),SERVERPROPERTY(''ProductUpdateLevel''))  [val], ''ProductUpdateLevel'' [param]
+	)
+
+insert into tempdb.dbo.dmvs (source,param,val)
+
+select 
+	''sys.os_sys_memory'' [view]
+	,param [param]
+	,val
+from os_sys_memory t
+unpivot
+(val  for param in ([total_physical_memory_kb],[available_physical_memory_kb],[total_page_file_kb],[available_page_file_kb],[system_memory_state_desc])
+) as pvt
+  UNION ALL 
+select 
+	''sys.os_windows_info'' [view]
+	,param [param]
+	,val
+from os_windows_info t
+unpivot
+(val  for param in ([windows_release],[windows_service_pack_level],[windows_sku],[os_language_version])
+) as pvt
+  UNION ALL
+select 
+	''sys.os_sys_info'' [view]
+	,param [param]
+	,val
+from os_sys_info t
+unpivot
+(val  for param in ([cpu_count],[hyperthread_ratio],/*[physical_memory_kb],[virtual_memory_kb],[committed_kb],[committed_target_kb],[visible_target_kb],*/
+					[os_quantum],[os_error_mode],[os_priority_class],[max_workers_count],[scheduler_count],[scheduler_total_count],[sqlserver_start_time],[affinity_type_desc],[virtual_machine_type_desc])
+) as pvt
+  UNION ALL
+select 
+	''SERVERPROPERTY()'' [view]
+	,param
+	,val
+from server_props'
+
+		exec (@cmd) at [SC_COMPARE_SERVERS]
+
+		insert into #configurations(src,configuration_id,name,value,value_in_use,[description],is_dynamic,is_advanced)
+		exec ('select ''dmvs and serverproperty()'',id,param,val,val,'''',0,0 from [SC_COMPARE_SERVERS].tempdb.dbo.dmvs')
+
+--------------------------------------------------------  
+	/*disk drives*/
+	select @cmd='truncate table tempdb.dbo.dmvs;
+declare @free table (drive varchar(5),mb_free int)
+insert into @free (drive,mb_free)
+exec xp_fixeddrives
+
+;with t1 as 
+	(
+	select 
+		left(physical_name,1) [drive]
+		,min(database_id) [dbid]
+		,min(file_id) [fileid]
+	from sys.master_files with (NOLOCK)
+	group by 
+		left(physical_name,1)
+		,database_id
+	)
+,t2 as 
+	(
+	select 
+		drive
+		,min(dbid) [dbid]
+		,fileid
+	from t1 
+	group by drive,fileid
+	)
+, t3 as (
+	SELECT vs.volume_mount_point
+		, vs.file_system_type
+		, vs.logical_volume_name
+		, CONVERT(DECIMAL(18,0),vs.total_bytes/1024/1024.0) AS [Total_Size_MB]
+		, CONVERT(DECIMAL(18,0),vs.available_bytes/1024/1024.0) AS [Available_Size_MB]
+		, CAST(CAST(vs.available_bytes AS FLOAT)/ CAST(vs.total_bytes AS FLOAT) AS DECIMAL(18,2)) * 100 AS [Space_Free_Percent] 
+	FROM t2 AS f WITH (NOLOCK)
+	CROSS APPLY sys.dm_os_volume_stats(f.dbid, f.[fileid]) AS vs)
+insert into  tempdb.dbo.dmvs (source,param,val)
+select 
+	''Disk drives'' [source]
+	,''Drive '' + quotename(left(isnull(t3.volume_mount_point,f.drive),1)) [param]
+	,isnull(''File system: '' + t3.file_system_type +char(10),'''')+
+	isnull(''Volume name: '' + t3.logical_volume_name +char(10),'''')+
+	isnull(''Total (MB): ''  + convert(varchar(20),t3.Total_Size_MB) +char(10),'''')+
+	''Free (MB):  ''  + isnull(convert(varchar(20),t3.Available_Size_MB),f.mb_free) [val] 
+from t3 
+right join @free f on t3.volume_mount_point=f.drive+'':\'''
+	
+		exec (@cmd) at [SC_COMPARE_SERVERS]
+
+		insert into #configurations(src,configuration_id,name,value,value_in_use,[description],is_dynamic,is_advanced)
+		exec ('select source,id,param,val,val,'''',0,0 from [SC_COMPARE_SERVERS].tempdb.dbo.dmvs')
+
+--------------------------------------------------------  
+	/*Databases and Logins*/
+	select @cmd='truncate table tempdb.dbo.dmvs;
+insert into  tempdb.dbo.dmvs (source,param,val)
+select   ''Databases'' [source]
+		,''Databases, Total'' [param]
+		,convert(varchar(200),count(1))  [val] 
+from sys.databases 
+union all
+select   ''Databases'' [source]
+		,''DB Size (MB), Total'' [param]
+		,convert(varchar(200),sum(size/128))  [val] 
+from sys.master_files 
+union all
+select  ''Databases'' [source]
+		,''Tempdb files, Total'' [param]
+		,count(1)  [val] 
+from sys.master_files 
+where database_id=2
+
+union all
+
+/* for many databases this recordset is too big
+select 
+	''Databases'' [source]
+	,''Database ''+quotename(d.name) [param]
+	,
+	''Owner: ''+isnull(convert(varchar(200),suser_sname(d.owner_sid)),''&lt;unknown&gt;'')+char(10)
+	+''Status: ''+convert(varchar(200),DATABASEPROPERTYEX(d.name,''Status'')) +char(10)
+	+''Recovery: ''+ convert(varchar(200),DATABASEPROPERTYEX(d.name,''Recovery'')) +char(10)
+	+''Data Size (MB): ''+convert(varchar(20),sum(case when mf.type=0 /*ROWS*/ then size else 0 end)/128) + char(10)
+	+''Log Size (MB): ''+convert(varchar(20),sum(case when mf.type=1 /*LOG*/ then size else 0 end)/128) + char(10)
+	+''Files: ''+convert(varchar(20),count(mf.database_id)) [val]
+from sys.master_files mf
+join sys.databases d on mf.database_id=d.database_id 
+group by 
+	d.name
+	,d.owner_sid
+
+Union ALL
+*/
+select 
+	''Logins'' [source]
+	,''Logins, Total'' [param]
+	,convert(varchar(200),count(1)) [val]
+from sys.server_principals 
+--where type in (''S'',''U'',''G'')
+where type&lt;&gt;''R''
+/*
+union all
+select 
+	''Logins'' [source]
+	,''Login ''+quotename(name) [param]
+	,
+	''Status: ''+case when is_disabled=1 then ''disabled'' else ''enabled'' end + char(10)
+	+''Type: ''+convert(varchar(200),type_desc)+char(10)
+	+''Default DB: ''+default_database_name+char(10)
+	+''Language: ''+isnull(default_language_name,''&lt;not set&gt;'')
+	+''Server roles: '' + isnull(stuff((select '', ''+g.name 
+					from sys.server_role_members rm
+						join sys.server_principals g on rm.role_principal_id=g.principal_id 
+					where rm.member_principal_id=sp.principal_id
+				for XML PATH('''')),1,1,''''),'''') 
+	+''Server Permissions: '' + isnull(stuff((select '', ''+p.permission_name+'' ''+quotename(p.state)
+					from sys.server_permissions p
+					where p.grantee_principal_id=sp.principal_id
+				for XML PATH('''')),1,1,''''),'''') 
+	collate SQL_Latin1_General_CP1_CI_AS [val] 
+from sys.server_principals  sp
+--where type in (''S'',''U'',''G'')
+where type&lt;&gt;''R''   */'
+	
+		exec (@cmd) at [SC_COMPARE_SERVERS]
+
+		insert into #configurations(src,configuration_id,name,value,value_in_use,[description],is_dynamic,is_advanced)
+		exec ('select source,id,param,val,val,'''',0,0 from [SC_COMPARE_SERVERS].tempdb.dbo.dmvs')
+
+
+
+/*clean-up*/
+		exec('drop table tempdb.dbo.dmvs') at [SC_COMPARE_SERVERS]
+
+		update #configurations
+		set srv=@srv 
+		where srv is null
+
+		delete #compare where servername=@srv
+	end
+
+select @addon=''
+if @show_diff = 1 select @addon=' and c2.value_in_use&lt;&gt;c1.value_in_use'
+
+select @cmd=' 
+select  distinct
+	c1.src
+	,c1.srv [srv1]
+	,c1.name
+	,c1.value_in_use [val1]
+	,c2.value_in_use [val2]
+	,c2.srv [srv2]
+	,c1.description
+from #configurations c1
+join #configurations c2 on /*c2.configuration_id=c1.configuration_id*/ c2.name=c1.name and c2.srv&lt;&gt;c1.srv 
+where c1.srv='''+@srv+''' '+@addon
+
+--print @cmd
+
+exec (@cmd)</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="src">
+          <DataField>src</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="srv1">
+          <DataField>srv1</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="name">
+          <DataField>name</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="val1">
+          <DataField>val1</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="val2">
+          <DataField>val2</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="srv2">
+          <DataField>srv2</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="description">
+          <DataField>description</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="dsInventory">
+      <Query>
+        <DataSourceName>DBAInventory</DataSourceName>
+        <QueryParameters>
+          <QueryParameter Name="@servers">
+            <Value>=Parameters!Servers.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@show_diff">
+            <Value>=iif(Parameters!show_diff.Value=true,1,0)</Value>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>/****** Script for SelectTopNRows command from SSMS  ******/
+set nocount on
+
+declare @srv varchar(255) -- servername
+declare @cmd1 varchar(8000)
+declare @addon varchar(100)
+--declare @show_diff int = 1
+
+declare @q1 varchar(8000)  /*raw_ComputerSystemDetails*/
+declare @q2 varchar(8000)  /*raw_OSDetails*/
+declare @q3 varchar(8000)  /*raw_PowerPlan*/
+declare @q4 varchar(8000)  /*raw_Processor*/
+declare @q5 varchar(8000)  /*raw_SQLServices*/
+declare @q6 varchar(8000)  /*raw_SQLServer*/
+
+if object_id('tempdb.dbo.#compare') is not null drop table #compare 
+if object_id('tempdb.dbo.#inventory') is not null drop table #inventory
+
+create table #inventory (srv varchar(255) null,parameter varchar(50),val varchar(255))
+
+if object_id('tempdb.dbo.Report_CompareServers') is null 
+   create table tempdb.dbo.Report_CompareServers (dt datetime default getdate(), servername varchar(100),instanceID int)
+/**/
+select servername
+into #compare
+from tempdb.dbo.Report_CompareServers
+where servername in (@servers)
+/**/
+/* debug 
+;with data as (
+	select 'NLAMS00304' [servername] union all select 'NLAMS10304'
+	)
+select servername 
+into #compare
+from data 
+*/
+
+/*raw_ComputerSystemDetails*/
+set @q1=
+'select parameter, replace(val,''"'','''') [val]
+from 
+(select convert(varchar(255),[systemname]) [systemname]
+	,convert(varchar(255),[domain]) [domain]
+	,convert(varchar(255),[model]) [model]
+	,convert(varchar(255),[logicalprocessors]) [logicalprocessors]
+	,convert(varchar(255),[processors]) [processors]
+	,convert(varchar(255),[totalram]) [totalram]
+FROM [dbo].[raw_ComputerSystemDetails]
+where [systemname] = ''@srv_name''
+) t
+unpivot
+(val for [Parameter] in
+	(
+	  -- [systemname],
+	  [domain]
+      ,[model]
+      ,[logicalprocessors]
+      ,[processors]
+      ,[totalram]
+	  )
+) a 
+option (recompile)
+'
+
+/*raw_OSDetails*/
+set @q2=
+'
+select parameter, replace(val,''"'','''') [val]
+from 
+(select 
+	convert(varchar(255),[systemname]) [systemname]
+	,convert(varchar(255),[caption]) [OScaption]
+	,convert(varchar(255),[version]) [OSversion]
+	,convert(varchar(255),[architecture]) [OSarchitecture]
+	,convert(varchar(255),[installdate]) [OSinstalldate]
+	,convert(varchar(255),[lastbootup]) [OSlastbootup]
+	,convert(varchar(255),[localdatetime]) [OSlocaldatetime]
+	,convert(varchar(255),[memoryphysicalfree]) [OSmemoryphysicalfree]
+	,convert(varchar(255),[memoryvirtualfree]) [OSmemoryvirtualfree]
+	,convert(varchar(255),[pagefilesfreespace]) [OSpagefilesfreespace]
+	,convert(varchar(255),[foregroungappboost]) [OSforegroungappboost]
+	,convert(varchar(255),[status]) [OSstatus]
+FROM [dbo].[raw_OSDetails]
+where [systemname] = ''@srv_name''
+) t
+unpivot
+(val for [Parameter] in
+	(
+	   --[systemname],
+      [OScaption]
+      ,[OSversion]
+      ,[OSarchitecture]
+      ,[OSinstalldate]
+      ,[OSlastbootup]
+      ,[OSlocaldatetime]
+      ,[OSmemoryphysicalfree]
+      ,[OSmemoryvirtualfree]
+      ,[OSpagefilesfreespace]
+      ,[OSforegroungappboost]
+      ,[OSstatus]
+	  )
+) a 
+option (recompile)
+'
+
+/*raw_PowerPlan*/
+set @q3=
+'
+select parameter, replace(val,''"'','''') [val]
+from 
+(select convert(varchar(255),[systemname]) [systemname]
+	,convert(varchar(255),[currentplan]) [CurrentPowerPlan]
+	,convert(varchar(255),[description]) [description]
+FROM [dbo].[raw_PowerPlan]
+where [systemname] = ''@srv_name''
+) t
+unpivot
+(val for [Parameter] in
+	(
+	   --[systemname],
+      [CurrentPowerPlan]
+      ,[description]
+	  )
+) a 
+option (recompile)
+'
+
+/*raw_Processor*/
+set @q4=
+'
+select parameter, replace(val,''"'','''') [val]
+from 
+(select convert(varchar(255),[systemname]) [systemname]
+	,convert(varchar(255),[name]) [CPUname]
+	,convert(varchar(255),[cores]) [CPUcores]
+	,convert(varchar(255),[logicalprocessors]) [CPUlogicalprocessors]
+	,convert(varchar(255),[clockspeedmax]) [CPUclockspeedmax]
+	,convert(varchar(255),[clockspeedcurrent]) [CPUclockspeedcurrent]
+	,convert(varchar(255),isnull([l2cache],'''')) [CPUl2cache]
+	,convert(varchar(255),isnull([l3cache],'''')) [CPUl3cache]
+	,convert(varchar(255),[enabledcores]) [CPUenabledcores]
+	,convert(varchar(255),count(1)) [CPUs]
+FROM [dbo].[raw_Processor]
+where [systemname] = ''@srv_name''
+group by [systemname]
+      ,[name]
+      ,[cores]
+      ,[logicalprocessors]
+      ,[clockspeedmax]
+      ,[clockspeedcurrent]
+      ,[l2cache]
+      ,[l3cache]
+      ,[enabledcores]
+) t
+unpivot
+(val for [Parameter] in
+	(
+	  --[systemname],
+      [CPUname]
+      ,[CPUcores]
+      ,[CPUlogicalprocessors]
+      ,[CPUclockspeedmax]
+      ,[CPUclockspeedcurrent]
+      ,[CPUl2cache]
+      ,[CPUl3cache]
+      ,[CPUenabledcores]
+	  ,[CPUs]
+	  )
+) a 
+option (recompile)
+'
+
+/*raw_SQLServices*/
+set @q5=
+'
+select ''SQL Services #''+convert(varchar(20),row_number() over (order by displayname))
+	,replace(displayname + '': ''+state +'' (''+startmode+'')'',''"'','''')
+from [dbo].[raw_SQLServices]
+where [systemname]=''@srv_name''
+option (recompile)
+'
+
+/*sql info*/
+set @q6=
+'
+select parameter, replace(val,''"'','''') [val]
+from 
+(select convert(varchar(255),[Instance]) [Instance]
+	,convert(varchar(255),[Host]) [SQLHost]
+	,convert(varchar(255),convert(varchar(20),convert(date,[Installed]),106)) [SQLInstalled]
+	,convert(varchar(255),[Version]) [SQLVersion]
+	,convert(varchar(255),[EngineEdition]) [SQLEngineEdition]
+	,convert(varchar(255),[ProductVersion]) [SQLProductVersion]
+	,convert(varchar(255),[ProductLevel]) [SQLProductLevel]
+	,convert(varchar(255),[ProductUpdateLevel]) [SQLProductUpdateLevel]
+	,convert(varchar(255),[Collation]) [SQLCollation]
+	,convert(varchar(255),[Authentication]) [SQLAuthentication]
+	,convert(varchar(255),[AuthScheme]) [SQLAuthScheme]
+	,convert(varchar(255),[IsHADREnabled]) [SQLIsHADREnabled]
+	,convert(varchar(255),[IsClustered]) [SQLIsClustered]
+	,convert(varchar(255),[IsMirrored]) [SQLIsMirrored]
+	,convert(varchar(255),[IsReplicated]) [SQLIsReplicated]
+	,convert(varchar(255),[IsLogShipped]) [SQLIsLogShipped]
+	,convert(varchar(255),
+			case 
+				when [uptime_mins]&gt;=1440 then convert(varchar(10),floor(uptime_mins/1440))+'' day(s) '' 
+				else '''' 
+			end 
+			+convert(varchar(20),dateadd(mi,uptime_mins,0),108)
+			) [SQLUptime]
+
+FROM [dbo].[raw_SQLServer]
+where [Instance] = ''@srv_name''
+
+) t
+unpivot
+(val for [Parameter] in
+	(
+	 [SQLHost]
+      ,[SQLInstalled]
+      ,[SQLVersion]
+      ,[SQLEngineEdition]
+      ,[SQLProductVersion]
+      ,[SQLProductLevel]
+      ,[SQLProductUpdateLevel]
+      ,[SQLCollation]
+      ,[SQLAuthentication]
+      ,[SQLAuthScheme]
+      ,[SQLIsHADREnabled]
+      ,[SQLIsClustered]
+      ,[SQLIsMirrored]
+      ,[SQLIsReplicated]
+      ,[SQLIsLogShipped]
+      ,[SQLUptime]
+	  )
+) a 
+option (recompile)
+'
+
+
+while exists (select top 1 1 from #compare)
+	begin
+		select top 1 
+			@srv=servername
+		from #compare
+
+		select @cmd1=replace(@q1,'@srv_name',@srv)
+		insert into #inventory (parameter,val)
+		exec(@cmd1)
+
+		select @cmd1=replace(@q2,'@srv_name',@srv)
+		insert into #inventory (parameter,val)
+		exec(@cmd1)
+
+		select @cmd1=replace(@q3,'@srv_name',@srv)
+		insert into #inventory (parameter,val)
+		exec(@cmd1)
+
+		select @cmd1=replace(@q4,'@srv_name',@srv)
+		insert into #inventory (parameter,val)
+		exec(@cmd1)
+
+		select @cmd1=replace(@q5,'@srv_name',@srv)
+		insert into #inventory (parameter,val)
+		exec(@cmd1)
+
+		select @cmd1=replace(@q6,'@srv_name',@srv)
+		insert into #inventory (parameter,val)
+		exec(@cmd1)
+
+		update #inventory 
+		set srv=@srv
+		where srv is null
+
+		delete #compare
+		where servername=@srv
+	end
+
+set @addon=''
+
+if @show_diff=1 
+	select @addon=' and isnull(t1.val,''[no data]'')&lt;&gt;isnull(t2.val,''[no data]'')'
+
+;with counts as 
+(select srv, count(1) [n] from #inventory group by srv)
+select top 1 @srv=srv 
+from counts 
+order by n desc
+
+select @cmd1='
+select 
+	isnull(t1.srv,''[no data]'') srv1
+	,isnull(t1.parameter,t2.parameter) [parameter]
+	,isnull(t1.val,''[no data]'') val1 
+	,isnull(t2.val,''[no data]'') val2
+	,isnull(t2.srv,''[no data]'') srv2
+from #inventory t1
+full outer join #inventory t2 on t1.parameter=t2.parameter and t1.srv&lt;&gt;t2.srv 
+where t1.srv='''+@srv+''''+@addon+' option (recompile)'
+
+
+exec (@cmd1)
+</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="srv1">
+          <DataField>srv1</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="parameter">
+          <DataField>parameter</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="val1">
+          <DataField>val1</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="val2">
+          <DataField>val2</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="srv2">
+          <DataField>srv2</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+      </Fields>
+    </DataSet>
+  </DataSets>
+  <ReportSections>
+    <ReportSection>
+      <Body>
+        <ReportItems>
+          <Tablix Name="Tablix2">
+            <TablixBody>
+              <TablixColumns>
+                <TablixColumn>
+                  <Width>0.5082in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>2.23958in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>2.28125in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>2.23958in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>3.40625in</Width>
+                </TablixColumn>
+              </TablixColumns>
+              <TablixRows>
+                <TablixRow>
+                  <Height>0.19792in</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox11">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>N</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox11</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox1">
+                          <CanGrow>true</CanGrow>
+                          <UserSort>
+                            <SortExpression>=Fields!name.Value</SortExpression>
+                          </UserSort>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Parameter</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox1</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox12">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=First(Fields!srv1.Value)</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox12</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox6">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=First(Fields!srv2.Value)</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox6</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox8">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Description</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox8</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+                <TablixRow>
+                  <Height>0.1875in</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox13">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=RowNumber(Nothing)</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox13</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="name">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!name.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>name</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="val1">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!val1.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>val1</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="val2">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!val2.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>val2</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="description">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!description.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>description</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+              </TablixRows>
+            </TablixBody>
+            <TablixColumnHierarchy>
+              <TablixMembers>
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+              </TablixMembers>
+            </TablixColumnHierarchy>
+            <TablixRowHierarchy>
+              <TablixMembers>
+                <TablixMember>
+                  <TablixHeader>
+                    <Size>1.45708in</Size>
+                    <CellContents>
+                      <Textbox Name="Textbox14">
+                        <CanGrow>true</CanGrow>
+                        <KeepTogether>true</KeepTogether>
+                        <Paragraphs>
+                          <Paragraph>
+                            <TextRuns>
+                              <TextRun>
+                                <Value>Source</Value>
+                                <Style>
+                                  <FontSize>8pt</FontSize>
+                                  <FontWeight>Bold</FontWeight>
+                                </Style>
+                              </TextRun>
+                            </TextRuns>
+                            <Style>
+                              <TextAlign>Center</TextAlign>
+                            </Style>
+                          </Paragraph>
+                        </Paragraphs>
+                        <rd:DefaultName>Textbox14</rd:DefaultName>
+                        <Style>
+                          <Border>
+                            <Color>LightGrey</Color>
+                            <Style>Solid</Style>
+                          </Border>
+                          <BackgroundColor>WhiteSmoke</BackgroundColor>
+                          <PaddingLeft>2pt</PaddingLeft>
+                          <PaddingRight>2pt</PaddingRight>
+                          <PaddingTop>2pt</PaddingTop>
+                          <PaddingBottom>2pt</PaddingBottom>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixHeader>
+                  <TablixMembers>
+                    <TablixMember />
+                  </TablixMembers>
+                  <KeepWithGroup>After</KeepWithGroup>
+                </TablixMember>
+                <TablixMember>
+                  <Group Name="src">
+                    <GroupExpressions>
+                      <GroupExpression>=Fields!src.Value</GroupExpression>
+                    </GroupExpressions>
+                  </Group>
+                  <SortExpressions>
+                    <SortExpression>
+                      <Value>=Fields!src.Value</Value>
+                    </SortExpression>
+                  </SortExpressions>
+                  <TablixHeader>
+                    <Size>1.45708in</Size>
+                    <CellContents>
+                      <Textbox Name="src">
+                        <CanGrow>true</CanGrow>
+                        <KeepTogether>true</KeepTogether>
+                        <Paragraphs>
+                          <Paragraph>
+                            <TextRuns>
+                              <TextRun>
+                                <Value>=Fields!src.Value</Value>
+                                <Style>
+                                  <FontSize>8pt</FontSize>
+                                </Style>
+                              </TextRun>
+                            </TextRuns>
+                            <Style>
+                              <TextAlign>Center</TextAlign>
+                            </Style>
+                          </Paragraph>
+                        </Paragraphs>
+                        <rd:DefaultName>src</rd:DefaultName>
+                        <Style>
+                          <Border>
+                            <Color>LightGrey</Color>
+                            <Style>Solid</Style>
+                          </Border>
+                          <PaddingLeft>2pt</PaddingLeft>
+                          <PaddingRight>2pt</PaddingRight>
+                          <PaddingTop>2pt</PaddingTop>
+                          <PaddingBottom>2pt</PaddingBottom>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixHeader>
+                  <TablixMembers>
+                    <TablixMember>
+                      <Group Name="Details" />
+                    </TablixMember>
+                  </TablixMembers>
+                </TablixMember>
+              </TablixMembers>
+            </TablixRowHierarchy>
+            <DataSetName>dsConfigurations</DataSetName>
+            <Top>1.59375in</Top>
+            <Left>0.10986in</Left>
+            <Height>0.38542in</Height>
+            <Width>12.13194in</Width>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+            </Style>
+          </Tablix>
+          <Textbox Name="Textbox16">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>="Comparison"&amp;
+iif(Parameters!show_diff.Value=True," (difference!) "," (all values) ")
+&amp;"of the following servers: " &amp; Parameters!Servers.Label(0)&amp;", "&amp;Parameters!Servers.Label(1)</Value>
+                    <Style>
+                      <FontSize>12pt</FontSize>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox16</rd:DefaultName>
+            <Top>0.06944in</Top>
+            <Left>0.10986in</Left>
+            <Height>0.25in</Height>
+            <Width>12.26042in</Width>
+            <ZIndex>1</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox17">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>Server parameters (inventory)</Value>
+                    <Style>
+                      <FontSize>11pt</FontSize>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox17</rd:DefaultName>
+            <Top>0.38889in</Top>
+            <Left>0.10986in</Left>
+            <Height>0.25in</Height>
+            <Width>2.98611in</Width>
+            <ZIndex>2</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox18">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>SQL configuration and settings</Value>
+                    <Style>
+                      <FontSize>11pt</FontSize>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox18</rd:DefaultName>
+            <Top>1.30208in</Top>
+            <Left>0.10986in</Left>
+            <Height>0.25in</Height>
+            <Width>2.98611in</Width>
+            <ZIndex>3</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Tablix Name="Tablix1">
+            <TablixBody>
+              <TablixColumns>
+                <TablixColumn>
+                  <Width>0.49305in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>2.23958in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>2.28125in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>2.23958in</Width>
+                </TablixColumn>
+              </TablixColumns>
+              <TablixRows>
+                <TablixRow>
+                  <Height>0.17708in</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox25">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>N</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox25</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox27">
+                          <CanGrow>true</CanGrow>
+                          <UserSort>
+                            <SortExpression>=Fields!parameter.Value</SortExpression>
+                          </UserSort>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Parameter</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox27</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox21">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=First(Fields!srv1.Value)</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox21</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox23">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=First(Fields!srv2.Value)</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox23</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+                <TablixRow>
+                  <Height>0.20833in</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox26">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=RowNumber(Nothing)</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox26</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="parameter">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!parameter.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Left</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>parameter</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="val11">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!val1.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>val11</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="val21">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!val2.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>val21</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+              </TablixRows>
+            </TablixBody>
+            <TablixColumnHierarchy>
+              <TablixMembers>
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+              </TablixMembers>
+            </TablixColumnHierarchy>
+            <TablixRowHierarchy>
+              <TablixMembers>
+                <TablixMember>
+                  <KeepWithGroup>After</KeepWithGroup>
+                </TablixMember>
+                <TablixMember>
+                  <Group Name="Details1" />
+                </TablixMember>
+              </TablixMembers>
+            </TablixRowHierarchy>
+            <DataSetName>dsInventory</DataSetName>
+            <Top>0.74166in</Top>
+            <Left>1.58208in</Left>
+            <Height>0.38541in</Height>
+            <Width>7.25346in</Width>
+            <ZIndex>4</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+            </Style>
+          </Tablix>
+        </ReportItems>
+        <Height>13.57312cm</Height>
+        <Style />
+      </Body>
+      <Width>31.6618cm</Width>
+      <Page>
+        <PageHeader>
+          <Height>1.69017cm</Height>
+          <PrintOnFirstPage>true</PrintOnFirstPage>
+          <PrintOnLastPage>true</PrintOnLastPage>
+          <ReportItems>
+            <Textbox Name="Textbox29">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>SQL Servers :</Value>
+                      <Style>
+                        <FontSize>12pt</FontSize>
+                        <FontWeight>Bold</FontWeight>
+                        <Color>RoyalBlue</Color>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style>
+                    <TextAlign>Right</TextAlign>
+                  </Style>
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>Textbox29</rd:DefaultName>
+              <Top>0.11806in</Top>
+              <Left>0.87153in</Left>
+              <Height>0.25in</Height>
+              <Width>1.34028in</Width>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>LightGrey</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Textbox Name="SQLServer">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>=Parameters!Servers.Label(0) &amp;" and " &amp; Parameters!Servers.Label(1)</Value>
+                      <Style>
+                        <FontSize>12pt</FontSize>
+                        <FontWeight>Bold</FontWeight>
+                        <Color>RoyalBlue</Color>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style />
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>SQLServer</rd:DefaultName>
+              <Top>0.11806in</Top>
+              <Left>2.32986in</Left>
+              <Height>0.25in</Height>
+              <Width>6.50569in</Width>
+              <ZIndex>1</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>LightGrey</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Textbox Name="txtReportCreated">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>= "Report created: "
+  + cstr(datepart(DateInterval.Day,globals!ExecutionTime))+ " "
+  + monthname(datepart(DateInterval.Month,globals!ExecutionTime),false)+ " "
+  + cstr(datepart(DateInterval.Year,globals!ExecutionTime)) + " "
+  + FormatDateTime(globals!ExecutionTime,dateformat.ShortTime)+":"
+  + right(cstr(100+datepart(DateInterval.Second,globals!ExecutionTime)),2)</Value>
+                      <Style>
+                        <FontWeight>Bold</FontWeight>
+                        <Color>Silver</Color>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style>
+                    <TextAlign>Right</TextAlign>
+                  </Style>
+                </Paragraph>
+              </Paragraphs>
+              <Top>0.0821in</Top>
+              <Left>9.46402in</Left>
+              <Height>0.25in</Height>
+              <Width>2.90625in</Width>
+              <ZIndex>2</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>Gray</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Textbox Name="txtReportPages">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>="Page " &amp; Globals!PageNumber &amp; " of " &amp; Globals!TotalPages</Value>
+                      <Style>
+                        <FontWeight>Bold</FontWeight>
+                        <Color>Silver</Color>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style>
+                    <TextAlign>Right</TextAlign>
+                  </Style>
+                </Paragraph>
+              </Paragraphs>
+              <Top>0.34598in</Top>
+              <Left>9.46402in</Left>
+              <Height>0.25in</Height>
+              <Width>2.90625in</Width>
+              <ZIndex>3</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>Gray</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+          </ReportItems>
+          <Style>
+            <Border>
+              <Style>None</Style>
+            </Border>
+            <BackgroundColor>WhiteSmoke</BackgroundColor>
+          </Style>
+        </PageHeader>
+        <PageHeight>50cm</PageHeight>
+        <PageWidth>29.7cm</PageWidth>
+        <LeftMargin>2.54cm</LeftMargin>
+        <RightMargin>2.54cm</RightMargin>
+        <TopMargin>2.54cm</TopMargin>
+        <BottomMargin>2.54cm</BottomMargin>
+        <ColumnSpacing>1.27cm</ColumnSpacing>
+        <Style />
+      </Page>
+    </ReportSection>
+  </ReportSections>
+  <ReportParameters>
+    <ReportParameter Name="SQLServer">
+      <DataType>String</DataType>
+      <Nullable>true</Nullable>
+      <Prompt>SQLServer</Prompt>
+      <Hidden>true</Hidden>
+    </ReportParameter>
+    <ReportParameter Name="Servers">
+      <DataType>String</DataType>
+      <Prompt>Select only 2 (two) SQL servers to compare:</Prompt>
+      <ValidValues>
+        <DataSetReference>
+          <DataSetName>dsServers</DataSetName>
+          <ValueField>servername</ValueField>
+          <LabelField>servername</LabelField>
+        </DataSetReference>
+      </ValidValues>
+      <MultiValue>true</MultiValue>
+    </ReportParameter>
+    <ReportParameter Name="show_diff">
+      <DataType>Boolean</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>true</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>Show only a difference in values:</Prompt>
+    </ReportParameter>
+  </ReportParameters>
+  <ReportParametersLayout>
+    <GridLayoutDefinition>
+      <NumberOfColumns>2</NumberOfColumns>
+      <NumberOfRows>2</NumberOfRows>
+      <CellDefinitions>
+        <CellDefinition>
+          <ColumnIndex>0</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>SQLServer</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>0</ColumnIndex>
+          <RowIndex>1</RowIndex>
+          <ParameterName>Servers</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>1</ColumnIndex>
+          <RowIndex>1</RowIndex>
+          <ParameterName>show_diff</ParameterName>
+        </CellDefinition>
+      </CellDefinitions>
+    </GridLayoutDefinition>
+  </ReportParametersLayout>
+  <EmbeddedImages>
+    <EmbeddedImage Name="rabobanklogo">
+      <MIMEType>image/gif</MIMEType>
+      <ImageData>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</ImageData>
+    </EmbeddedImage>
+  </EmbeddedImages>
+  <rd:ReportUnitType>Cm</rd:ReportUnitType>
+  <rd:ReportID>2df4235d-f200-47c0-9cfa-06345f3a871a</rd:ReportID>
+</Report>

@@ -1,0 +1,3212 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner">
+  <AutoRefresh>0</AutoRefresh>
+  <DataSources>
+    <DataSource Name="DataSource1">
+      <Transaction>true</Transaction>
+      <ConnectionProperties>
+        <DataProvider>SQL</DataProvider>
+        <ConnectString>="Data Source="&amp;Parameters!SQLServer.Value</ConnectString>
+        <IntegratedSecurity>true</IntegratedSecurity>
+      </ConnectionProperties>
+      <rd:SecurityType>Integrated</rd:SecurityType>
+      <rd:DataSourceID>960523cf-97d5-4530-81a0-6c294fa8ff36</rd:DataSourceID>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="dsDisks">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <CommandText>
+
+declare @drives table (drive varchar(5),MBFree int)
+declare @drive_info table (
+	volume_mount_point nvarchar(512),
+	file_system_type nvarchar(512),
+	logical_volume_name nvarchar(512),
+	[Total_Size_GB] DECIMAL(18,2),
+	[Available_Size_GB] DECIMAL(18,2),
+	[Space_Free_Percent] DECIMAL(18,2))
+
+
+insert into @drives (drive,MBFree)
+exec xp_fixeddrives 
+
+update @drives 
+set drive=drive+':\'
+
+--select * from @drives 
+
+if convert(varchar(20),SERVERPROPERTY('ProductVersion')) not like '10.0.%' 
+	begin
+		declare @cmd varchar(2048)
+		select @cmd=
+					'with files(database_id,file_id) as
+						(select 
+							min(database_id)
+							,min(file_id)
+						from sys.master_files with (NOLOCK)
+						group by 
+						left(physical_name,len(physical_name)-charindex(''\'',reverse(physical_name)))
+						)
+					SELECT distinct
+						vs.volume_mount_point
+					, vs.file_system_type
+					, vs.logical_volume_name
+					, CONVERT(DECIMAL(18,2),vs.total_bytes/1024/1024/1024.0) AS [Total_Size_GB]
+					, CONVERT(DECIMAL(18,2),vs.available_bytes/1024/1024/1024.0) AS [Available_Size_GB]
+					, CAST(CAST(vs.available_bytes AS FLOAT)/ CAST(vs.total_bytes AS FLOAT) AS DECIMAL(18,2)) * 100 AS [Space_Free_Percent] 
+					FROM files AS f WITH (NOLOCK)
+					CROSS APPLY sys.dm_os_volume_stats(f.database_id, f.[file_id]) AS vs 
+					OPTION (RECOMPILE)'
+		--select @cmd
+		insert into @drive_info([volume_mount_point],[file_system_type],[logical_volume_name],[Total_Size_GB],[Available_Size_GB],[Space_Free_Percent])
+		exec (@cmd)
+	end 
+
+;with data as (
+select 
+	di.[volume_mount_point] [volume_mount_point]
+	,convert(varchar(50),di.[file_system_type]) [file_system_type]
+	,convert(varchar(50),di.[logical_volume_name]) [logical_volume_name]
+	,convert(varchar(50),di.[Total_Size_GB]) [Total_Size_GB]
+	,convert(varchar(50),di.[Available_Size_GB]) [Available_Size_GB]
+	,convert(varchar(50),di.[Space_Free_Percent]) [Space_Free_Percent]
+	,type_desc+' ('+convert(varchar(10),count(1))+')' [dbfiles]
+from @drive_info di
+join sys.master_files mf  on patindex(di.volume_mount_point+'%',mf.physical_name)&gt;0
+group by di.volume_mount_point
+	,convert(varchar(50),di.[file_system_type])
+	,convert(varchar(50),di.[logical_volume_name]) 
+	,convert(varchar(50),di.[Total_Size_GB])
+	,convert(varchar(50),di.[Available_Size_GB])
+	,convert(varchar(50),di.[Space_Free_Percent])
+	,mf.type_desc
+)
+select distinct 
+	 d1.[volume_mount_point]
+	,d1.[file_system_type]
+	,d1.[logical_volume_name]
+	,d1.[Total_Size_GB]
+	,d1.[Available_Size_GB]
+	,d1.[Space_Free_Percent]
+	,100-convert(numeric(8,2),d1.[Space_Free_Percent]) [Space_Used_Percent]
+	,isnull(reverse(stuff(reverse((select d2.dbfiles + ', ' as 'data()' from data d2 where d2.[volume_mount_point]=d1.[volume_mount_point] for xml path('') )),1,2,'')),'') [Type&amp;Amount]
+into #total
+from data d1 
+union all
+select 
+	drive,NULL,NULL,NULL,convert(varchar(20),convert(numeric(10,2),d.MBFree/1024.)),NULL,NULL,NULL
+from @drives d
+where drive not in (select [volume_mount_point] from data)
+option (recompile)
+
+select 
+[volume_mount_point]
+,[file_system_type]
+,[logical_volume_name]
+,[Total_Size_GB]
+,[Available_Size_GB]
+,[Space_Free_Percent]
+,[Space_Used_Percent]
+,[Type&amp;Amount]
+from #total</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="volume_mount_point">
+          <DataField>volume_mount_point</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="file_system_type">
+          <DataField>file_system_type</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="logical_volume_name">
+          <DataField>logical_volume_name</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Total_Size_GB">
+          <DataField>Total_Size_GB</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Available_Size_GB">
+          <DataField>Available_Size_GB</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Space_Free_Percent">
+          <DataField>Space_Free_Percent</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Space_Used_Percent">
+          <DataField>Space_Used_Percent</DataField>
+          <rd:TypeName>System.Decimal</rd:TypeName>
+        </Field>
+        <Field Name="Type_Amount">
+          <DataField>Type&amp;Amount</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="dsFiles">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <QueryParameters>
+          <QueryParameter Name="@ddrive">
+            <Value>=Parameters!DiskDrive.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>set nocount on;
+--declare @ddrive varchar(50)  = 'I:\';
+
+declare @db table (db varchar(128))
+create  table #files
+	(
+	Drive varchar(10),
+	DBName varchar(128),
+	FileType varchar(10),
+	LogicalName varchar(128),
+	PhysicalName varchar(512),
+	SizeMB numeric(10,2),
+	Comment varchar(128),
+	[FileGroup] varchar(128),
+	SpaceUsedMB numeric(10,2),
+	SpaceFreeMB numeric(10,2),
+	[Status] varchar(50),
+	MaxSizeMB varchar(20),
+	Growth varchar(20) 
+	)
+declare @d varchar(128)
+declare @cmd varchar(4096)
+
+insert into @db (db)
+select name 
+from sys.databases
+where is_in_standby&lt;&gt;1
+and DATABASEPROPERTYEX(name,'Status')='ONLINE'
+and database_id in (select database_id from sys.master_files where physical_name like @ddrive+'%')
+
+--select * from @db 
+
+while exists (select top 1 1 from @db)
+	begin
+		select top 1 @d=db from @db 
+
+		set @cmd='use ['+@d+'];'
+		set @cmd=@cmd+'select 
+							left(physical_name,3) [Drive]
+							,db_name() [DBName]
+							,type_desc [FileType]
+							,name [LogicalName]
+							,physical_name
+							,size/128. [SizeMB]
+							,state_desc [comment]
+							,case when data_space_id=0 then '''' 
+							else (select name+N'' (''+type_desc+N'')'' collate SQL_Latin1_General_CP1_CI_AS from sys.data_spaces where data_space_id=df.data_space_id) end [FileGroup]
+
+							,CAST(FILEPROPERTY(df.name, ''SpaceUsed'') AS int)/128. [SpaceUsedMB]
+							,size/128.0 - CAST(FILEPROPERTY(df.name, ''SpaceUsed'') AS int)/128. AS [SpaceFreeMB]
+
+							,df.state_desc as [Status]
+
+							,case 
+								when df.max_size=-1 then ''Unlimited''
+								else convert(varchar(50),ceiling(df.max_size/128.)) end as [MaxSizeMB]
+
+							,case 
+								when df.is_percent_growth=1 then convert(varchar(20),df.growth)+''%''
+								else 
+								convert(varchar(20),convert(int,df.growth/128.))+'' MB'' end as [Growth]
+
+						from sys.database_files df 
+						where physical_name like '''+@ddrive+'%''
+						option (recompile)'
+
+		insert into #files (Drive,DBName,FileType,LogicalName,PhysicalName,SizeMB,Comment,[FileGroup],SpaceUsedMB,SpaceFreeMB,[Status],MaxSizeMB,Growth)
+		exec (@cmd)
+
+		set @cmd=''
+		delete from @db where db=@d
+	end
+
+--- filter out either drives or mount points which start with the same letter
+
+set @cmd='
+select 
+	Drive
+	,DBName
+	,FileType
+	,LogicalName
+	,PhysicalName
+	,SizeMB
+	,Comment
+	,[FileGroup]
+	,SpaceUsedMB
+	,SpaceFreeMB
+	,[Status]
+	,MaxSizeMB
+	,Growth 
+from #files 
+where PhysicalName like '''+@ddrive+ '%'''
+
+declare @out varchar(1024) = ''  -- dynamic filter 
+
+if len(@ddrive)=3  /*valid for real disk drives; exclude mount points which reside on the drive*/
+	select @out=@out+' and PhysicalName not like '''+volume_mount_point+'%'' ' 
+	from #total 
+	where volume_mount_point &lt;&gt;@ddrive 
+
+set @cmd=@cmd+@out+' option (recompile);'
+
+exec (@cmd)
+drop table #files </CommandText>
+      </Query>
+      <Fields>
+        <Field Name="Drive">
+          <DataField>Drive</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="DBName">
+          <DataField>DBName</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="FileType">
+          <DataField>FileType</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="LogicalName">
+          <DataField>LogicalName</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="PhysicalName">
+          <DataField>PhysicalName</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="SizeMB">
+          <DataField>SizeMB</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="comment">
+          <DataField>comment</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="FileGroup">
+          <DataField>FileGroup</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="SpaceUsedMB">
+          <DataField>SpaceUsedMB</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="SpaceFreeMB">
+          <DataField>SpaceFreeMB</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="Status">
+          <DataField>Status</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="MaxSizeMB">
+          <DataField>MaxSizeMB</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="Growth">
+          <DataField>Growth</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="dsUsage">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <QueryParameters>
+          <QueryParameter Name="@ddrive">
+            <Value>=Parameters!DiskDrive.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>--declare @ddrive varchar(50)  = 'I:\SQL_Log\';
+declare @cmd varchar(8000) = '';
+declare @used numeric(10,2) = 0
+declare @out varchar(1024) = ''  -- dynamic filter 
+declare @tmp table (ttl numeric(10,2))
+
+if len(@ddrive)=3  /*valid for real disk drives; exclude mount points which reside on the drive*/
+	select @out=@out+' and physical_name not like '''+volume_mount_point+'%'' ' 
+	from #total 
+	where volume_mount_point &lt;&gt;@ddrive 
+
+set @cmd='
+select convert(numeric(10,2),sum(size/128.)/1024) /*in GBs*/
+from sys.master_files 
+where physical_name like '''+@ddrive+ '%''' +@out + ' option (recompile);'
+
+insert into @tmp (ttl)
+exec (@cmd)
+
+-- get the total size of all files
+select top 1 @used=isnull(ttl,0) from @tmp
+
+select 
+	convert(numeric(10,2),Total_Size_GB) [total]
+	,convert(numeric(10,2),Available_Size_GB) [free]
+	,@ddrive [drive]
+	,@ddrive [filter]  -- will not be used
+	,convert(numeric(10,2),@used) [usedbyfiles]
+from #total
+where volume_mount_point=@ddrive
+
+drop table #total</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="total">
+          <DataField>total</DataField>
+          <rd:TypeName>System.Object</rd:TypeName>
+        </Field>
+        <Field Name="free">
+          <DataField>free</DataField>
+          <rd:TypeName>System.Object</rd:TypeName>
+        </Field>
+        <Field Name="drive">
+          <DataField>drive</DataField>
+          <rd:TypeName>System.Object</rd:TypeName>
+        </Field>
+        <Field Name="filter">
+          <DataField>filter</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="usedbyfiles">
+          <DataField>usedbyfiles</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+      </Fields>
+    </DataSet>
+  </DataSets>
+  <ReportSections>
+    <ReportSection>
+      <Body>
+        <ReportItems>
+          <Tablix Name="Tablix1">
+            <TablixBody>
+              <TablixColumns>
+                <TablixColumn>
+                  <Width>0.29675in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>1.9685in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>0.6875in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>1.76155in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>1.60268in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>6.13805in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>0.8786in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>0.85925in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>0.88009in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>0.66134in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>0.68217in</Width>
+                </TablixColumn>
+              </TablixColumns>
+              <TablixRows>
+                <TablixRow>
+                  <Height>0.1875in</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox5">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>N</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox5</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox3">
+                          <CanGrow>true</CanGrow>
+                          <UserSort>
+                            <SortExpression>=Fields!DBName.Value</SortExpression>
+                          </UserSort>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>DBName</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox3</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox1">
+                          <CanGrow>true</CanGrow>
+                          <UserSort>
+                            <SortExpression>=Fields!FileType.Value</SortExpression>
+                          </UserSort>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>File Type</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox1</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox41">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>File Group</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox41</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox9">
+                          <CanGrow>true</CanGrow>
+                          <UserSort>
+                            <SortExpression>=Fields!LogicalName.Value</SortExpression>
+                          </UserSort>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Logical Name</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox9</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox11">
+                          <CanGrow>true</CanGrow>
+                          <UserSort>
+                            <SortExpression>=Fields!PhysicalName.Value</SortExpression>
+                          </UserSort>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Physical Name</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox11</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox13">
+                          <CanGrow>true</CanGrow>
+                          <UserSort>
+                            <SortExpression>=Fields!SizeMB.Value</SortExpression>
+                          </UserSort>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Size (MB)</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox13</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox31">
+                          <CanGrow>true</CanGrow>
+                          <UserSort>
+                            <SortExpression>=Fields!SpaceUsedMB.Value</SortExpression>
+                          </UserSort>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Used </Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>(MB)</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox31</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox34">
+                          <CanGrow>true</CanGrow>
+                          <UserSort>
+                            <SortExpression>=Fields!SpaceFreeMB.Value</SortExpression>
+                          </UserSort>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Free </Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>(MB)</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox34</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox36">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Max Size</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>(GB)</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox36</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox38">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Growth</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox38</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+                <TablixRow>
+                  <Height>0.17708in</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox6">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=RowNumber(Nothing)</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox6</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="DBName">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!DBName.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <TextDecoration>Underline</TextDecoration>
+                                    <Color>Blue</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>DBName</rd:DefaultName>
+                          <ActionInfo>
+                            <Actions>
+                              <Action>
+                                <Drillthrough>
+                                  <ReportName>DBInformation</ReportName>
+                                  <Parameters>
+                                    <Parameter Name="SQLServer">
+                                      <Value>=Parameters!SQLServer.Value</Value>
+                                    </Parameter>
+                                    <Parameter Name="DBName">
+                                      <Value>=Fields!DBName.Value</Value>
+                                    </Parameter>
+                                  </Parameters>
+                                </Drillthrough>
+                              </Action>
+                            </Actions>
+                          </ActionInfo>
+                          <ToolTip>=Fields!comment.Value</ToolTip>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="FileType">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!FileType.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>FileType</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="FileGroup">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!FileGroup.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>FileGroup</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="LogicalName">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!LogicalName.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>LogicalName</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="PhysicalName">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!PhysicalName.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>PhysicalName</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="SizeMB">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!SizeMB.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <Format>#,0.00;(#,0.00)</Format>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Right</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>SizeMB</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="SpaceUsedMB">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!SpaceUsedMB.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <Format>#,0.00;(#,0.00)</Format>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Right</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>SpaceUsedMB</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="SpaceFreeMB">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!SpaceFreeMB.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <Format>#,0.00;(#,0.00)</Format>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Right</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>SpaceFreeMB</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="MaxSizeMB">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!MaxSizeMB.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Right</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>MaxSizeMB</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Growth">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!Growth.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Growth</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+              </TablixRows>
+            </TablixBody>
+            <TablixColumnHierarchy>
+              <TablixMembers>
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+              </TablixMembers>
+            </TablixColumnHierarchy>
+            <TablixRowHierarchy>
+              <TablixMembers>
+                <TablixMember />
+                <TablixMember>
+                  <Group Name="Details" />
+                </TablixMember>
+              </TablixMembers>
+            </TablixRowHierarchy>
+            <DataSetName>dsFiles</DataSetName>
+            <Top>2.341in</Top>
+            <Left>0.11959in</Left>
+            <Height>0.36458in</Height>
+            <Width>16.41648in</Width>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+            </Style>
+          </Tablix>
+          <Textbox Name="Textbox15">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>="Database files on the drive:"</Value>
+                    <Style>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox15</rd:DefaultName>
+            <Top>5.25821cm</Top>
+            <Left>0.30375cm</Left>
+            <Height>0.6cm</Height>
+            <Width>4.72159cm</Width>
+            <ZIndex>1</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox16">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=count(Fields!Drive.Value, "dsFiles")</Value>
+                    <Style>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style>
+                  <TextAlign>Center</TextAlign>
+                </Style>
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox16</rd:DefaultName>
+            <Top>5.24029cm</Top>
+            <Left>5.29169cm</Left>
+            <Height>0.6cm</Height>
+            <Width>1.67569cm</Width>
+            <ZIndex>2</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <BackgroundColor>WhiteSmoke</BackgroundColor>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Chart Name="Chart1">
+            <ChartCategoryHierarchy>
+              <ChartMembers>
+                <ChartMember>
+                  <Group Name="Chart1_CategoryGroup">
+                    <GroupExpressions>
+                      <GroupExpression>=Fields!drive.Value</GroupExpression>
+                    </GroupExpressions>
+                  </Group>
+                  <SortExpressions>
+                    <SortExpression>
+                      <Value>=Fields!drive.Value</Value>
+                    </SortExpression>
+                  </SortExpressions>
+                  <Label>=Fields!drive.Value</Label>
+                </ChartMember>
+              </ChartMembers>
+            </ChartCategoryHierarchy>
+            <ChartSeriesHierarchy>
+              <ChartMembers>
+                <ChartMember>
+                  <Label>Size MB</Label>
+                </ChartMember>
+                <ChartMember>
+                  <Label>usedbyfiles</Label>
+                </ChartMember>
+                <ChartMember>
+                  <Label>free</Label>
+                </ChartMember>
+              </ChartMembers>
+            </ChartSeriesHierarchy>
+            <ChartData>
+              <ChartSeriesCollection>
+                <ChartSeries Name="usedbyfiles">
+                  <ChartDataPoints>
+                    <ChartDataPoint>
+                      <ChartDataPointValues>
+                        <Y>=iif(Sum(Fields!usedbyfiles.Value)&lt;(Sum(Fields!SizeMB.Value, "dsFiles")/1024)
+   ,Sum(Fields!SizeMB.Value, "dsFiles")/1024 
+   ,Sum(Fields!usedbyfiles.Value)
+  
+   )</Y>
+                      </ChartDataPointValues>
+                      <ChartDataLabel>
+                        <Style>
+                          <Format>#,0.00;(#,0.00)</Format>
+                        </Style>
+                        <UseValueAsLabel>true</UseValueAsLabel>
+                        <Visible>true</Visible>
+                      </ChartDataLabel>
+                      <ToolTip>="Used by DB files: "+ formatnumber(Fields!usedbyfiles.Value,2)+"(GB)"</ToolTip>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Width>1.5pt</Width>
+                        </Border>
+                        <Color>Gray</Color>
+                      </Style>
+                      <ChartMarker>
+                        <Style />
+                      </ChartMarker>
+                      <DataElementOutput>Output</DataElementOutput>
+                    </ChartDataPoint>
+                  </ChartDataPoints>
+                  <Type>Bar</Type>
+                  <Subtype>Stacked</Subtype>
+                  <Style />
+                  <ChartEmptyPoints>
+                    <Style />
+                    <ChartMarker>
+                      <Style />
+                    </ChartMarker>
+                    <ChartDataLabel>
+                      <Style />
+                    </ChartDataLabel>
+                  </ChartEmptyPoints>
+                  <ChartItemInLegend>
+                    <LegendText>Used by DB files (GB)</LegendText>
+                  </ChartItemInLegend>
+                  <ValueAxisName>Primary</ValueAxisName>
+                  <CategoryAxisName>Primary</CategoryAxisName>
+                  <ChartSmartLabel>
+                    <CalloutLineColor>Black</CalloutLineColor>
+                    <MinMovingDistance>0pt</MinMovingDistance>
+                  </ChartSmartLabel>
+                </ChartSeries>
+                <ChartSeries Name="Series">
+                  <ChartDataPoints>
+                    <ChartDataPoint>
+                      <ChartDataPointValues>
+                        <Y>=Fields!total.Value-Fields!free.Value-Fields!usedbyfiles.Value</Y>
+                      </ChartDataPointValues>
+                      <ChartDataLabel>
+                        <Style>
+                          <Format>#,0.00;(#,0.00)</Format>
+                        </Style>
+                        <UseValueAsLabel>true</UseValueAsLabel>
+                        <Visible>true</Visible>
+                      </ChartDataLabel>
+                      <ToolTip>="Used by other files: "+
+formatnumber(Fields!total.Value-Fields!free.Value-Fields!usedbyfiles.Value,2)
++"(GB)"</ToolTip>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Width>1.5pt</Width>
+                        </Border>
+                        <Color>Orange</Color>
+                      </Style>
+                      <ChartMarker>
+                        <Style />
+                      </ChartMarker>
+                      <DataElementOutput>Output</DataElementOutput>
+                    </ChartDataPoint>
+                  </ChartDataPoints>
+                  <Type>Bar</Type>
+                  <Subtype>Stacked</Subtype>
+                  <Style />
+                  <ChartEmptyPoints>
+                    <Style />
+                    <ChartMarker>
+                      <Style />
+                    </ChartMarker>
+                    <ChartDataLabel>
+                      <Style />
+                    </ChartDataLabel>
+                  </ChartEmptyPoints>
+                  <ChartItemInLegend>
+                    <LegendText>Used by other files (GB)</LegendText>
+                  </ChartItemInLegend>
+                  <ValueAxisName>Primary</ValueAxisName>
+                  <CategoryAxisName>Primary</CategoryAxisName>
+                  <ChartSmartLabel>
+                    <CalloutLineColor>Black</CalloutLineColor>
+                    <MinMovingDistance>0pt</MinMovingDistance>
+                  </ChartSmartLabel>
+                </ChartSeries>
+                <ChartSeries Name="free">
+                  <ChartDataPoints>
+                    <ChartDataPoint>
+                      <ChartDataPointValues>
+                        <Y>=Sum(Fields!free.Value)</Y>
+                      </ChartDataPointValues>
+                      <ChartDataLabel>
+                        <Style>
+                          <Format>#,0.00;(#,0.00)</Format>
+                        </Style>
+                        <UseValueAsLabel>true</UseValueAsLabel>
+                        <Visible>true</Visible>
+                      </ChartDataLabel>
+                      <ToolTip>="Free space: "+formatnumber(Fields!free.Value,2)+"(GB)"</ToolTip>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Width>1.5pt</Width>
+                        </Border>
+                        <Color>WhiteSmoke</Color>
+                      </Style>
+                      <ChartMarker>
+                        <Style />
+                      </ChartMarker>
+                      <DataElementOutput>Output</DataElementOutput>
+                    </ChartDataPoint>
+                  </ChartDataPoints>
+                  <Type>Bar</Type>
+                  <Subtype>Stacked</Subtype>
+                  <Style />
+                  <ChartEmptyPoints>
+                    <Style />
+                    <ChartMarker>
+                      <Style />
+                    </ChartMarker>
+                    <ChartDataLabel>
+                      <Style />
+                    </ChartDataLabel>
+                  </ChartEmptyPoints>
+                  <ChartItemInLegend>
+                    <LegendText>Free space (GB)</LegendText>
+                  </ChartItemInLegend>
+                  <ValueAxisName>Primary</ValueAxisName>
+                  <CategoryAxisName>Primary</CategoryAxisName>
+                  <ChartSmartLabel>
+                    <CalloutLineColor>Black</CalloutLineColor>
+                    <MinMovingDistance>0pt</MinMovingDistance>
+                  </ChartSmartLabel>
+                </ChartSeries>
+              </ChartSeriesCollection>
+            </ChartData>
+            <ChartAreas>
+              <ChartArea Name="Default">
+                <ChartCategoryAxes>
+                  <ChartAxis Name="Primary">
+                    <Visible>False</Visible>
+                    <Style>
+                      <FontSize>8pt</FontSize>
+                    </Style>
+                    <ChartAxisTitle>
+                      <Caption />
+                      <Style>
+                        <FontSize>8pt</FontSize>
+                      </Style>
+                    </ChartAxisTitle>
+                    <ChartMajorGridLines>
+                      <Enabled>False</Enabled>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                        </Border>
+                      </Style>
+                    </ChartMajorGridLines>
+                    <ChartMinorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                          <Style>Dotted</Style>
+                        </Border>
+                      </Style>
+                    </ChartMinorGridLines>
+                    <ChartMinorTickMarks>
+                      <Length>0.5</Length>
+                    </ChartMinorTickMarks>
+                    <CrossAt>NaN</CrossAt>
+                    <Minimum>NaN</Minimum>
+                    <Maximum>NaN</Maximum>
+                    <ChartAxisScaleBreak>
+                      <Style />
+                    </ChartAxisScaleBreak>
+                  </ChartAxis>
+                  <ChartAxis Name="Secondary">
+                    <Style>
+                      <FontSize>8pt</FontSize>
+                    </Style>
+                    <ChartAxisTitle>
+                      <Caption>Axis Title</Caption>
+                      <Style>
+                        <FontSize>8pt</FontSize>
+                      </Style>
+                    </ChartAxisTitle>
+                    <ChartMajorGridLines>
+                      <Enabled>False</Enabled>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                        </Border>
+                      </Style>
+                    </ChartMajorGridLines>
+                    <ChartMinorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                          <Style>Dotted</Style>
+                        </Border>
+                      </Style>
+                    </ChartMinorGridLines>
+                    <ChartMinorTickMarks>
+                      <Length>0.5</Length>
+                    </ChartMinorTickMarks>
+                    <CrossAt>NaN</CrossAt>
+                    <Location>Opposite</Location>
+                    <Minimum>NaN</Minimum>
+                    <Maximum>NaN</Maximum>
+                    <ChartAxisScaleBreak>
+                      <Style />
+                    </ChartAxisScaleBreak>
+                  </ChartAxis>
+                </ChartCategoryAxes>
+                <ChartValueAxes>
+                  <ChartAxis Name="Primary">
+                    <Style>
+                      <Border>
+                        <Color>White</Color>
+                      </Border>
+                      <FontSize>8pt</FontSize>
+                      <Format>0;(0)</Format>
+                    </Style>
+                    <ChartAxisTitle>
+                      <Caption />
+                      <Style>
+                        <FontSize>8pt</FontSize>
+                      </Style>
+                    </ChartAxisTitle>
+                    <Interval>=Fields!total.Value/10</Interval>
+                    <IntervalType>Number</IntervalType>
+                    <ChartMajorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                        </Border>
+                      </Style>
+                    </ChartMajorGridLines>
+                    <ChartMinorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                          <Style>Dotted</Style>
+                        </Border>
+                      </Style>
+                    </ChartMinorGridLines>
+                    <ChartMinorTickMarks>
+                      <Length>0.5</Length>
+                    </ChartMinorTickMarks>
+                    <CrossAt>NaN</CrossAt>
+                    <Minimum>NaN</Minimum>
+                    <Maximum>=Fields!total.Value</Maximum>
+                    <ChartAxisScaleBreak>
+                      <Style />
+                    </ChartAxisScaleBreak>
+                  </ChartAxis>
+                  <ChartAxis Name="Secondary">
+                    <Style>
+                      <FontSize>8pt</FontSize>
+                    </Style>
+                    <ChartAxisTitle>
+                      <Caption>Axis Title</Caption>
+                      <Style>
+                        <FontSize>8pt</FontSize>
+                      </Style>
+                    </ChartAxisTitle>
+                    <ChartMajorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                        </Border>
+                      </Style>
+                    </ChartMajorGridLines>
+                    <ChartMinorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                          <Style>Dotted</Style>
+                        </Border>
+                      </Style>
+                    </ChartMinorGridLines>
+                    <ChartMinorTickMarks>
+                      <Length>0.5</Length>
+                    </ChartMinorTickMarks>
+                    <CrossAt>NaN</CrossAt>
+                    <Location>Opposite</Location>
+                    <Minimum>NaN</Minimum>
+                    <Maximum>NaN</Maximum>
+                    <ChartAxisScaleBreak>
+                      <Style />
+                    </ChartAxisScaleBreak>
+                  </ChartAxis>
+                </ChartValueAxes>
+                <Style>
+                  <BackgroundGradientType>None</BackgroundGradientType>
+                </Style>
+              </ChartArea>
+            </ChartAreas>
+            <ChartLegends>
+              <ChartLegend Name="Legend1">
+                <Style>
+                  <BackgroundGradientType>None</BackgroundGradientType>
+                  <FontSize>8pt</FontSize>
+                </Style>
+                <ChartLegendTitle>
+                  <Caption />
+                  <Style>
+                    <FontSize>8pt</FontSize>
+                    <FontWeight>Bold</FontWeight>
+                    <TextAlign>Center</TextAlign>
+                  </Style>
+                </ChartLegendTitle>
+                <HeaderSeparatorColor>Black</HeaderSeparatorColor>
+                <ColumnSeparatorColor>Black</ColumnSeparatorColor>
+              </ChartLegend>
+            </ChartLegends>
+            <ChartTitles>
+              <ChartTitle Name="Default">
+                <Caption>="Drive """+Parameters!DiskDrive.Value+""" (GB)"</Caption>
+                <Style>
+                  <BackgroundGradientType>None</BackgroundGradientType>
+                  <FontWeight>Bold</FontWeight>
+                  <TextAlign>General</TextAlign>
+                  <VerticalAlign>Top</VerticalAlign>
+                </Style>
+              </ChartTitle>
+            </ChartTitles>
+            <Palette>BrightPastel</Palette>
+            <ChartBorderSkin>
+              <Style>
+                <BackgroundColor>Gray</BackgroundColor>
+                <BackgroundGradientType>None</BackgroundGradientType>
+                <Color>White</Color>
+              </Style>
+            </ChartBorderSkin>
+            <ChartNoDataMessage Name="NoDataMessage">
+              <Caption>No Data Available</Caption>
+              <Style>
+                <BackgroundGradientType>None</BackgroundGradientType>
+                <TextAlign>General</TextAlign>
+                <VerticalAlign>Top</VerticalAlign>
+              </Style>
+            </ChartNoDataMessage>
+            <DataSetName>dsUsage</DataSetName>
+            <Top>2.56008cm</Top>
+            <Left>0.30375cm</Left>
+            <Height>2.59229cm</Height>
+            <Width>23.88799cm</Width>
+            <ZIndex>3</ZIndex>
+            <Style>
+              <Border>
+                <Color>LightGrey</Color>
+                <Style>Solid</Style>
+              </Border>
+              <BackgroundColor>White</BackgroundColor>
+              <BackgroundGradientType>None</BackgroundGradientType>
+            </Style>
+          </Chart>
+          <Chart Name="Chart3">
+            <ChartCategoryHierarchy>
+              <ChartMembers>
+                <ChartMember>
+                  <Group Name="ChartGroup" />
+                  <Label />
+                </ChartMember>
+              </ChartMembers>
+            </ChartCategoryHierarchy>
+            <ChartSeriesHierarchy>
+              <ChartMembers>
+                <ChartMember>
+                  <Label>total</Label>
+                </ChartMember>
+                <ChartMember>
+                  <Label>total</Label>
+                </ChartMember>
+              </ChartMembers>
+            </ChartSeriesHierarchy>
+            <ChartData>
+              <ChartSeriesCollection>
+                <ChartSeries Name="total">
+                  <ChartDataPoints>
+                    <ChartDataPoint>
+                      <ChartDataPointValues>
+                        <Y>=formatnumber((Fields!total.Value-Fields!free.Value)/Fields!total.Value*100,0)</Y>
+                      </ChartDataPointValues>
+                      <ChartDataLabel>
+                        <Style />
+                        <UseValueAsLabel>true</UseValueAsLabel>
+                        <Visible>true</Visible>
+                      </ChartDataLabel>
+                      <ToolTip>=formatnumber(Fields!total.Value-Fields!free.Value,2)+"(GB) Used"</ToolTip>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Width>1.5pt</Width>
+                        </Border>
+                        <Color>WhiteSmoke</Color>
+                      </Style>
+                      <ChartMarker>
+                        <Style />
+                      </ChartMarker>
+                      <DataElementOutput>Output</DataElementOutput>
+                      <ChartItemInLegend>
+                        <LegendText>% Used</LegendText>
+                      </ChartItemInLegend>
+                    </ChartDataPoint>
+                  </ChartDataPoints>
+                  <Type>Shape</Type>
+                  <Style />
+                  <ChartEmptyPoints>
+                    <Style />
+                    <ChartMarker>
+                      <Style />
+                    </ChartMarker>
+                    <ChartDataLabel>
+                      <Style />
+                    </ChartDataLabel>
+                  </ChartEmptyPoints>
+                  <ValueAxisName>Primary</ValueAxisName>
+                  <CategoryAxisName>Primary</CategoryAxisName>
+                  <ChartSmartLabel>
+                    <CalloutLineColor>Black</CalloutLineColor>
+                    <MinMovingDistance>0pt</MinMovingDistance>
+                  </ChartSmartLabel>
+                </ChartSeries>
+                <ChartSeries Name="free">
+                  <ChartDataPoints>
+                    <ChartDataPoint>
+                      <ChartDataPointValues>
+                        <Y>=formatnumber(Sum(Fields!free.Value)/Fields!total.Value*100,0)</Y>
+                      </ChartDataPointValues>
+                      <ChartDataLabel>
+                        <Style />
+                        <UseValueAsLabel>true</UseValueAsLabel>
+                        <Visible>true</Visible>
+                      </ChartDataLabel>
+                      <ToolTip>=formatnumber(Fields!free.Value,2)+"(GB) Free"</ToolTip>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Width>1.5pt</Width>
+                        </Border>
+                        <Color>White</Color>
+                      </Style>
+                      <ChartMarker>
+                        <Style />
+                      </ChartMarker>
+                      <DataElementOutput>Output</DataElementOutput>
+                      <ChartItemInLegend>
+                        <LegendText>% Free</LegendText>
+                      </ChartItemInLegend>
+                    </ChartDataPoint>
+                  </ChartDataPoints>
+                  <Type>Shape</Type>
+                  <Style />
+                  <ChartEmptyPoints>
+                    <Style />
+                    <ChartMarker>
+                      <Style />
+                    </ChartMarker>
+                    <ChartDataLabel>
+                      <Style />
+                    </ChartDataLabel>
+                  </ChartEmptyPoints>
+                  <ValueAxisName>Primary</ValueAxisName>
+                  <CategoryAxisName>Primary</CategoryAxisName>
+                  <ChartSmartLabel>
+                    <CalloutLineColor>Black</CalloutLineColor>
+                    <MinMovingDistance>0pt</MinMovingDistance>
+                  </ChartSmartLabel>
+                </ChartSeries>
+              </ChartSeriesCollection>
+            </ChartData>
+            <ChartAreas>
+              <ChartArea Name="Default">
+                <ChartCategoryAxes>
+                  <ChartAxis Name="Primary">
+                    <Style>
+                      <FontSize>8pt</FontSize>
+                    </Style>
+                    <ChartAxisTitle>
+                      <Caption>Axis Title</Caption>
+                      <Style>
+                        <FontSize>8pt</FontSize>
+                      </Style>
+                    </ChartAxisTitle>
+                    <ChartMajorGridLines>
+                      <Enabled>False</Enabled>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                        </Border>
+                      </Style>
+                    </ChartMajorGridLines>
+                    <ChartMinorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                          <Style>Dotted</Style>
+                        </Border>
+                      </Style>
+                    </ChartMinorGridLines>
+                    <ChartMinorTickMarks>
+                      <Length>0.5</Length>
+                    </ChartMinorTickMarks>
+                    <CrossAt>NaN</CrossAt>
+                    <Minimum>NaN</Minimum>
+                    <Maximum>NaN</Maximum>
+                    <ChartAxisScaleBreak>
+                      <Style />
+                    </ChartAxisScaleBreak>
+                  </ChartAxis>
+                  <ChartAxis Name="Secondary">
+                    <Style>
+                      <FontSize>8pt</FontSize>
+                    </Style>
+                    <ChartAxisTitle>
+                      <Caption>Axis Title</Caption>
+                      <Style>
+                        <FontSize>8pt</FontSize>
+                      </Style>
+                    </ChartAxisTitle>
+                    <ChartMajorGridLines>
+                      <Enabled>False</Enabled>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                        </Border>
+                      </Style>
+                    </ChartMajorGridLines>
+                    <ChartMinorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                          <Style>Dotted</Style>
+                        </Border>
+                      </Style>
+                    </ChartMinorGridLines>
+                    <ChartMinorTickMarks>
+                      <Length>0.5</Length>
+                    </ChartMinorTickMarks>
+                    <CrossAt>NaN</CrossAt>
+                    <Location>Opposite</Location>
+                    <Minimum>NaN</Minimum>
+                    <Maximum>NaN</Maximum>
+                    <ChartAxisScaleBreak>
+                      <Style />
+                    </ChartAxisScaleBreak>
+                  </ChartAxis>
+                </ChartCategoryAxes>
+                <ChartValueAxes>
+                  <ChartAxis Name="Primary">
+                    <Style>
+                      <FontSize>8pt</FontSize>
+                    </Style>
+                    <ChartAxisTitle>
+                      <Caption>Axis Title</Caption>
+                      <Style>
+                        <FontSize>8pt</FontSize>
+                      </Style>
+                    </ChartAxisTitle>
+                    <ChartMajorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                        </Border>
+                      </Style>
+                    </ChartMajorGridLines>
+                    <ChartMinorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                          <Style>Dotted</Style>
+                        </Border>
+                      </Style>
+                    </ChartMinorGridLines>
+                    <ChartMinorTickMarks>
+                      <Length>0.5</Length>
+                    </ChartMinorTickMarks>
+                    <CrossAt>NaN</CrossAt>
+                    <Minimum>NaN</Minimum>
+                    <Maximum>NaN</Maximum>
+                    <ChartAxisScaleBreak>
+                      <Style />
+                    </ChartAxisScaleBreak>
+                  </ChartAxis>
+                  <ChartAxis Name="Secondary">
+                    <Style>
+                      <FontSize>8pt</FontSize>
+                    </Style>
+                    <ChartAxisTitle>
+                      <Caption>Axis Title</Caption>
+                      <Style>
+                        <FontSize>8pt</FontSize>
+                      </Style>
+                    </ChartAxisTitle>
+                    <ChartMajorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                        </Border>
+                      </Style>
+                    </ChartMajorGridLines>
+                    <ChartMinorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                          <Style>Dotted</Style>
+                        </Border>
+                      </Style>
+                    </ChartMinorGridLines>
+                    <ChartMinorTickMarks>
+                      <Length>0.5</Length>
+                    </ChartMinorTickMarks>
+                    <CrossAt>NaN</CrossAt>
+                    <Location>Opposite</Location>
+                    <Minimum>NaN</Minimum>
+                    <Maximum>NaN</Maximum>
+                    <ChartAxisScaleBreak>
+                      <Style />
+                    </ChartAxisScaleBreak>
+                  </ChartAxis>
+                </ChartValueAxes>
+                <Style>
+                  <BackgroundGradientType>None</BackgroundGradientType>
+                </Style>
+              </ChartArea>
+            </ChartAreas>
+            <ChartLegends>
+              <ChartLegend Name="Default">
+                <Style>
+                  <BackgroundGradientType>None</BackgroundGradientType>
+                  <FontSize>8pt</FontSize>
+                </Style>
+                <Position>RightCenter</Position>
+                <Layout>Column</Layout>
+                <ChartLegendTitle>
+                  <Caption />
+                  <Style>
+                    <FontSize>8pt</FontSize>
+                    <FontWeight>Bold</FontWeight>
+                    <TextAlign>Center</TextAlign>
+                  </Style>
+                </ChartLegendTitle>
+                <HeaderSeparatorColor>Black</HeaderSeparatorColor>
+                <ColumnSeparatorColor>Black</ColumnSeparatorColor>
+              </ChartLegend>
+            </ChartLegends>
+            <Palette>BrightPastel</Palette>
+            <ChartBorderSkin>
+              <Style>
+                <BackgroundColor>Gray</BackgroundColor>
+                <BackgroundGradientType>None</BackgroundGradientType>
+                <Color>White</Color>
+              </Style>
+            </ChartBorderSkin>
+            <ChartNoDataMessage Name="NoDataMessage">
+              <Caption>No Data Available</Caption>
+              <Style>
+                <BackgroundGradientType>None</BackgroundGradientType>
+                <TextAlign>General</TextAlign>
+                <VerticalAlign>Top</VerticalAlign>
+              </Style>
+            </ChartNoDataMessage>
+            <DataSetName>dsUsage</DataSetName>
+            <Top>2.56008cm</Top>
+            <Left>24.33285cm</Left>
+            <Height>2.59229cm</Height>
+            <Width>6.10306cm</Width>
+            <ZIndex>4</ZIndex>
+            <Style>
+              <Border>
+                <Color>LightGrey</Color>
+                <Style>Solid</Style>
+              </Border>
+              <BackgroundColor>White</BackgroundColor>
+              <BackgroundGradientType>None</BackgroundGradientType>
+            </Style>
+          </Chart>
+          <Textbox Name="Textbox32">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>="Space usage on drive """ &amp; Parameters!DiskDrive.Value &amp; """"</Value>
+                    <Style>
+                      <FontSize>12pt</FontSize>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox32</rd:DefaultName>
+            <Top>1.80106cm</Top>
+            <Left>0.30375cm</Left>
+            <Height>0.63528cm</Height>
+            <Width>12.59029cm</Width>
+            <ZIndex>5</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Tablix Name="Tablix2">
+            <TablixBody>
+              <TablixColumns>
+                <TablixColumn>
+                  <Width>3.81556cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>1.56194cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>3.78614cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>2.5cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>2.5cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>2.5cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>2.5cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>4.19333cm</Width>
+                </TablixColumn>
+              </TablixColumns>
+              <TablixRows>
+                <TablixRow>
+                  <Height>0.46771cm</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox2">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Drive</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox2</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox7">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>File </Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>System </Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox7</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox10">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Volume Name</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox10</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox14">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Total Size </Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>(GB)</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox14</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox18">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Used</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>(GB)</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox18</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox20">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Free </Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>(GB)</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox20</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox22">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Free</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>(%%)</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox22</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox24">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>DB File Types</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox24</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+                <TablixRow>
+                  <Height>0.44125cm</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="volume_mount_point">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!volume_mount_point.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <TextDecoration>Underline</TextDecoration>
+                                    <Color>Blue</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>volume_mount_point</rd:DefaultName>
+                          <ActionInfo>
+                            <Actions>
+                              <Action>
+                                <Drillthrough>
+                                  <ReportName>DBFiles</ReportName>
+                                  <Parameters>
+                                    <Parameter Name="SQLServer">
+                                      <Value>=Parameters!SQLServer.Value</Value>
+                                    </Parameter>
+                                    <Parameter Name="DiskDrive">
+                                      <Value>=Fields!volume_mount_point.Value</Value>
+                                    </Parameter>
+                                    <Parameter Name="TotalSize">
+                                      <Value>=iif(Fields!Total_Size_GB.Value=Nothing,0,Fields!Total_Size_GB.Value)</Value>
+                                    </Parameter>
+                                    <Parameter Name="FreeSpace">
+                                      <Value>=Fields!Available_Size_GB.Value</Value>
+                                    </Parameter>
+                                  </Parameters>
+                                </Drillthrough>
+                              </Action>
+                            </Actions>
+                          </ActionInfo>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>=iif(Fields!volume_mount_point.Value=Parameters!DiskDrive.Value,"Khaki","White")</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="file_system_type">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!file_system_type.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>file_system_type</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>=iif(Fields!volume_mount_point.Value=Parameters!DiskDrive.Value,"Khaki","White")</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="logical_volume_name">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!logical_volume_name.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>logical_volume_name</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>=iif(Fields!volume_mount_point.Value=Parameters!DiskDrive.Value,"Khaki","White")</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Total_Size_GB">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!Total_Size_GB.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Total_Size_GB</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>=iif(Fields!volume_mount_point.Value=Parameters!DiskDrive.Value,"Khaki","White")</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox19">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=iif(Fields!Total_Size_GB.Value=Nothing,"",Fields!Total_Size_GB.Value-Fields!Available_Size_GB.Value)</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox19</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>=iif(Fields!volume_mount_point.Value=Parameters!DiskDrive.Value,"Khaki","White")</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Available_Size_GB">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!Available_Size_GB.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Available_Size_GB</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>=iif(Fields!volume_mount_point.Value=Parameters!DiskDrive.Value,"Khaki","White")</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Space_Free_Percent">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!Space_Free_Percent.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Space_Free_Percent</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>=iif(Fields!volume_mount_point.Value=Parameters!DiskDrive.Value,"Khaki","White")</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Type_Amount">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!Type_Amount.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Type_Amount</rd:DefaultName>
+                          <ToolTip>=iif(Fields!Type_Amount.Value=Nothing,"No database files","ROWS - data files"&amp;chr(10)&amp;"LOG - log files")</ToolTip>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>=iif(Fields!volume_mount_point.Value=Parameters!DiskDrive.Value,"Khaki","White")</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+              </TablixRows>
+            </TablixBody>
+            <TablixColumnHierarchy>
+              <TablixMembers>
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+              </TablixMembers>
+            </TablixColumnHierarchy>
+            <TablixRowHierarchy>
+              <TablixMembers>
+                <TablixMember>
+                  <KeepWithGroup>After</KeepWithGroup>
+                </TablixMember>
+                <TablixMember>
+                  <Group Name="Details1" />
+                </TablixMember>
+              </TablixMembers>
+            </TablixRowHierarchy>
+            <DataSetName>dsDisks</DataSetName>
+            <SortExpressions>
+              <SortExpression>
+                <Value>=Fields!volume_mount_point.Value</Value>
+              </SortExpression>
+            </SortExpressions>
+            <Top>0.55561cm</Top>
+            <Left>4.68525cm</Left>
+            <Height>0.90896cm</Height>
+            <Width>23.35697cm</Width>
+            <ZIndex>6</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+            </Style>
+          </Tablix>
+        </ReportItems>
+        <Height>15.37166cm</Height>
+        <Style />
+      </Body>
+      <Width>42.25263cm</Width>
+      <Page>
+        <PageHeader>
+          <Height>1.65557cm</Height>
+          <PrintOnFirstPage>true</PrintOnFirstPage>
+          <PrintOnLastPage>true</PrintOnLastPage>
+          <ReportItems>
+            <Textbox Name="Textbox29">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>SQL Server :</Value>
+                      <Style>
+                        <FontSize>12pt</FontSize>
+                        <FontWeight>Bold</FontWeight>
+                        <Color>RoyalBlue</Color>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style>
+                    <TextAlign>Right</TextAlign>
+                  </Style>
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>Textbox29</rd:DefaultName>
+              <Top>0.05556in</Top>
+              <Left>0.87153in</Left>
+              <Height>0.25in</Height>
+              <Width>1.34028in</Width>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>Silver</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Textbox Name="SQLServer">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>=Parameters!SQLServer.Value</Value>
+                      <Style>
+                        <FontSize>12pt</FontSize>
+                        <FontWeight>Bold</FontWeight>
+                        <Color>RoyalBlue</Color>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style />
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>SQLServer</rd:DefaultName>
+              <Top>0.05556in</Top>
+              <Left>2.32986in</Left>
+              <Height>0.25in</Height>
+              <Width>4.04167in</Width>
+              <ZIndex>1</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>Silver</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Textbox Name="txtReportCreated">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>= "Report created: "
+  + cstr(datepart(DateInterval.Day,globals!ExecutionTime))+ " "
+  + monthname(datepart(DateInterval.Month,globals!ExecutionTime),false)+ " "
+  + cstr(datepart(DateInterval.Year,globals!ExecutionTime)) + " "
+  + FormatDateTime(globals!ExecutionTime,dateformat.ShortTime)+":"
+  + right(cstr(100+datepart(DateInterval.Second,globals!ExecutionTime)),2)</Value>
+                      <Style>
+                        <FontWeight>Bold</FontWeight>
+                        <Color>Silver</Color>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style>
+                    <TextAlign>Right</TextAlign>
+                  </Style>
+                </Paragraph>
+              </Paragraphs>
+              <Top>0.05209in</Top>
+              <Left>9.01111in</Left>
+              <Height>0.25in</Height>
+              <Width>2.90625in</Width>
+              <ZIndex>2</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>Gray</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Textbox Name="txtReportPages">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>="Page " &amp; Globals!PageNumber &amp; " of " &amp; Globals!TotalPages</Value>
+                      <Style>
+                        <FontWeight>Bold</FontWeight>
+                        <Color>Silver</Color>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style>
+                    <TextAlign>Right</TextAlign>
+                  </Style>
+                </Paragraph>
+              </Paragraphs>
+              <Top>0.31597in</Top>
+              <Left>9.01111in</Left>
+              <Height>0.25in</Height>
+              <Width>2.90625in</Width>
+              <ZIndex>3</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>Gray</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Textbox Name="Textbox26">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>Disk Drives and Space Usage</Value>
+                      <Style>
+                        <FontSize>12pt</FontSize>
+                        <FontWeight>Bold</FontWeight>
+                        <Color>RoyalBlue</Color>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style />
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>Textbox26</rd:DefaultName>
+              <Top>0.94546cm</Top>
+              <Left>2.17839cm</Left>
+              <Height>0.6cm</Height>
+              <Width>6.78625cm</Width>
+              <ZIndex>4</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>Silver</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Image Name="Image1">
+              <Source>Embedded</Source>
+              <Value>back_button</Value>
+              <Sizing>FitProportional</Sizing>
+              <ActionInfo>
+                <Actions>
+                  <Action>
+                    <Drillthrough>
+                      <ReportName>QuickOverview</ReportName>
+                      <Parameters>
+                        <Parameter Name="SQLServer">
+                          <Value>=Parameters!SQLServer.Value</Value>
+                        </Parameter>
+                      </Parameters>
+                    </Drillthrough>
+                  </Action>
+                </Actions>
+              </ActionInfo>
+              <Top>0.0762cm</Top>
+              <Left>0.0762cm</Left>
+              <Height>1.5cm</Height>
+              <Width>1.5cm</Width>
+              <ZIndex>5</ZIndex>
+              <ToolTip>Back</ToolTip>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+              </Style>
+            </Image>
+          </ReportItems>
+          <Style>
+            <Border>
+              <Style>None</Style>
+            </Border>
+            <BackgroundColor>WhiteSmoke</BackgroundColor>
+          </Style>
+        </PageHeader>
+        <PageHeight>50cm</PageHeight>
+        <PageWidth>21cm</PageWidth>
+        <LeftMargin>2.54cm</LeftMargin>
+        <RightMargin>2.54cm</RightMargin>
+        <TopMargin>2.54cm</TopMargin>
+        <BottomMargin>2.54cm</BottomMargin>
+        <ColumnSpacing>1.27cm</ColumnSpacing>
+        <Style />
+      </Page>
+    </ReportSection>
+  </ReportSections>
+  <ReportParameters>
+    <ReportParameter Name="SQLServer">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>nl000rep03</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>SQLServer</Prompt>
+      <Hidden>true</Hidden>
+    </ReportParameter>
+    <ReportParameter Name="DiskDrive">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>C:\</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>DiskDrive</Prompt>
+      <Hidden>true</Hidden>
+    </ReportParameter>
+    <ReportParameter Name="TotalSize">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>30</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>TotalSize in GB</Prompt>
+      <Hidden>true</Hidden>
+    </ReportParameter>
+    <ReportParameter Name="FreeSpace">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>20</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>FreeSpace in GB</Prompt>
+      <Hidden>true</Hidden>
+    </ReportParameter>
+  </ReportParameters>
+  <ReportParametersLayout>
+    <GridLayoutDefinition>
+      <NumberOfColumns>4</NumberOfColumns>
+      <NumberOfRows>1</NumberOfRows>
+      <CellDefinitions>
+        <CellDefinition>
+          <ColumnIndex>0</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>SQLServer</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>1</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>DiskDrive</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>2</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>TotalSize</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>3</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>FreeSpace</ParameterName>
+        </CellDefinition>
+      </CellDefinitions>
+    </GridLayoutDefinition>
+  </ReportParametersLayout>
+  <EmbeddedImages>
+    <EmbeddedImage Name="back_button">
+      <MIMEType>image/png</MIMEType>
+      <ImageData>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</ImageData>
+    </EmbeddedImage>
+  </EmbeddedImages>
+  <rd:ReportUnitType>Cm</rd:ReportUnitType>
+  <rd:ReportID>2df4235d-f200-47c0-9cfa-06345f3a871a</rd:ReportID>
+</Report>

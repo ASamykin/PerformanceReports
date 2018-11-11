@@ -1,0 +1,2808 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Report MustUnderstand="df" xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner" xmlns:df="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition/defaultfontfamily">
+  <df:DefaultFontFamily>Segoe UI</df:DefaultFontFamily>
+  <AutoRefresh>0</AutoRefresh>
+  <DataSources>
+    <DataSource Name="DataSource1">
+      <ConnectionProperties>
+        <DataProvider>SQL</DataProvider>
+        <ConnectString>="Data Source="+Parameters!SQLServer.Value</ConnectString>
+        <IntegratedSecurity>true</IntegratedSecurity>
+      </ConnectionProperties>
+      <rd:SecurityType>Integrated</rd:SecurityType>
+      <rd:DataSourceID>beac9552-7c74-4270-8bf4-ff671f54bed6</rd:DataSourceID>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="dsClusterInfo">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <CommandText>select 
+cluster_name
+, quorum_type_desc
+,quorum_state_desc 
+from sys.dm_hadr_cluster	</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="cluster_name">
+          <DataField>cluster_name</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="quorum_type_desc">
+          <DataField>quorum_type_desc</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="quorum_state_desc">
+          <DataField>quorum_state_desc</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="dsClusterMembers">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <CommandText>select 
+member_name
+,member_type_desc
+,member_state_desc
+,number_of_quorum_votes 
+from sys.dm_hadr_cluster_members	</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="member_name">
+          <DataField>member_name</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="member_type_desc">
+          <DataField>member_type_desc</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="member_state_desc">
+          <DataField>member_state_desc</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="number_of_quorum_votes">
+          <DataField>number_of_quorum_votes</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="dsRepairedPages">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <CommandText>select db_name(database_id) [db], count(1) [n]
+from sys.dm_hadr_auto_page_repair 
+group by db_name(database_id)</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="db">
+          <DataField>db</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="n">
+          <DataField>n</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="dsAvailabilityGroups_tmp1">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <CommandText>/*
+select 
+	ag.name 
+	,case 
+		when ag.failure_condition_level = 1 then 'When SQL Server service is down.'
+		when ag.failure_condition_level = 2 then 'The instance of SQL Server does not connect to cluster and HEALTH_CHECK_TIMEOUT threshold is exceeded.'+char(10)+'The availability replica is in failed state.'
+		when ag.failure_condition_level = 3 then 'On critical SQL Server internal errors, such as orphaned spinlocks, serious write-access violations or too much dumping.'
+		when ag.failure_condition_level = 4 then 'On moderate SQL Server internal errors, such as a persistent out-of-memory condition in the SQL Server internal resource pool.'
+		when ag.failure_condition_level = 5 then 'On any qualified failure conditions, including exhaustion of SQL Engine worker-threads, detection of an unsolvable deadlock.'
+	end [AutomaticFailoverCondition]
+	,ag.health_check_timeout/1000 [timeout_s]
+	,ag.automated_backup_preference_desc
+	,gs.primary_replica
+	,isnull(gs.primary_recovery_health_desc,gs.secondary_recovery_health_desc)+', '+ gs.synchronization_health_desc [Health]
+	,ar.replica_server_name [SecondaryReplica]
+	,ar.availability_mode_desc + ', '+ar.failover_mode_desc +' failover' [SecondaryReplicaHealth]
+
+from 
+sys.dm_hadr_availability_group_states gs
+join sys.availability_groups ag on gs.group_id=ag.group_id
+join sys.availability_replicas ar on gs.group_id=ar.group_id and gs.primary_replica&lt;&gt;ar.replica_server_name
+*/</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="name">
+          <DataField>name</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="AutomaticFailoverCondition">
+          <DataField>AutomaticFailoverCondition</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="Timeout">
+          <DataField>Timeout</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="Backup">
+          <DataField>Backup</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="Current">
+          <DataField>Current</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="Health">
+          <DataField>Health</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="SecondaryReplica">
+          <DataField>SecondaryReplica</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="SecondaryReplicaHealth">
+          <DataField>SecondaryReplicaHealth</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="dsAvailabilityGroups">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <CommandText>
+select distinct
+ag.name
+	,case 
+		when ag.failure_condition_level = 1 then '[1] When SQL Server service is down.'
+		when ag.failure_condition_level = 2 then '[2] The instance of SQL Server does not connect to cluster and HEALTH_CHECK_TIMEOUT threshold is exceeded.'+char(10)+'The availability replica is in failed state.'
+		when ag.failure_condition_level = 3 then '[3] On critical SQL Server internal errors, such as orphaned spinlocks, serious write-access violations or too much dumping.'
+		when ag.failure_condition_level = 4 then '[4] On moderate SQL Server internal errors, such as a persistent out-of-memory condition in the SQL Server internal resource pool.'
+		when ag.failure_condition_level = 5 then '[5] On any qualified failure conditions, including exhaustion of SQL Engine worker-threads, detection of an unsolvable deadlock.'
+	end [AutomaticFailoverCondition]
+	,ag.health_check_timeout/1000 [timeout_s]
+	,ag.automated_backup_preference_desc
+	,isnull(ar.replica_server_name,cn.replica_server_name) [replica_server_name]
+	,ar.availability_mode_desc +char(10)+ar.failover_mode_desc + ' failover' [AvailabilityFailover]
+	,ars.is_local
+	,case when ag.name is not null and ars.role_desc is null then '[not known]' else ars.role_desc end [role_desc]
+	,ars.operational_state
+	,ars.operational_state_desc
+	,ars.connected_state
+	,ars.connected_state_desc
+	,ars.recovery_health
+	,ars.recovery_health_desc
+	,ars.synchronization_health
+	,ars.synchronization_health_desc
+	,ars.last_connect_error_timestamp
+	,ars.last_connect_error_number
+	,ars.last_connect_error_description
+,(select count(1) from sys.dm_hadr_database_replica_states rs2 where rs2.group_id=ag.group_id and rs2.is_local=1) [DBs]
+,(select count(1) from sys.availability_group_listeners where group_id=ag.group_id) [Listeners]
+from sys.availability_groups ag
+join sys.availability_replicas ar on ag.group_id=ar.group_id
+left join sys.dm_hadr_availability_replica_states ars on ars.replica_id=ar.replica_id
+right join sys.dm_hadr_availability_replica_cluster_nodes cn on ar.replica_server_name=cn.replica_server_name</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="name">
+          <DataField>name</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="AutomaticFailoverCondition">
+          <DataField>AutomaticFailoverCondition</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="timeout_s">
+          <DataField>timeout_s</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="automated_backup_preference_desc">
+          <DataField>automated_backup_preference_desc</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="replica_server_name">
+          <DataField>replica_server_name</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="AvailabilityFailover">
+          <DataField>AvailabilityFailover</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="is_local">
+          <DataField>is_local</DataField>
+          <rd:TypeName>System.Boolean</rd:TypeName>
+        </Field>
+        <Field Name="role_desc">
+          <DataField>role_desc</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="operational_state_desc">
+          <DataField>operational_state_desc</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="operational_state">
+          <DataField>operational_state</DataField>
+          <rd:TypeName>System.Byte</rd:TypeName>
+        </Field>
+        <Field Name="connected_state_desc">
+          <DataField>connected_state_desc</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="connected_state">
+          <DataField>connected_state</DataField>
+          <rd:TypeName>System.Byte</rd:TypeName>
+        </Field>
+        <Field Name="recovery_health_desc">
+          <DataField>recovery_health_desc</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="synchronization_health_desc">
+          <DataField>synchronization_health_desc</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="recovery_health">
+          <DataField>recovery_health</DataField>
+          <rd:TypeName>System.Byte</rd:TypeName>
+        </Field>
+        <Field Name="last_connect_error_timestamp">
+          <DataField>last_connect_error_timestamp</DataField>
+          <rd:TypeName>System.DateTime</rd:TypeName>
+        </Field>
+        <Field Name="last_connect_error_number">
+          <DataField>last_connect_error_number</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="synchronization_health">
+          <DataField>synchronization_health</DataField>
+          <rd:TypeName>System.Byte</rd:TypeName>
+        </Field>
+        <Field Name="last_connect_error_description">
+          <DataField>last_connect_error_description</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="DBs">
+          <DataField>DBs</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="Listeners">
+          <DataField>Listeners</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="dsListeners">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <CommandText>with data as (
+select 
+	ag.name [agname]
+	,al.dns_name [listenerdnsname]
+	,al.port
+	,ali.state_desc [status]
+	,al.dns_name+':'+convert(varchar(10),al.port)+' ('+ali.state_desc+')' [verbose]
+from sys.availability_group_listeners al
+join sys.availability_groups ag on al.group_id=ag.group_id
+join sys.availability_group_listener_ip_addresses ali on ali.listener_id=al.listener_id
+)
+select 
+	d1.agname
+,(select [verbose]+char(10) as 'data()' from data d2 where d2.agname=d1.agname for xml path('')) [listeners]
+from data d1
+option (recompile)
+</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="agname">
+          <DataField>agname</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="listeners">
+          <DataField>listeners</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="dsARStateChange">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <CommandText>
+
+DECLARE @FileName NVARCHAR(4000)
+declare @events table 
+(dt datetime,prev_state varchar(50),curr_state varchar(50),ar_name varchar(50), ag_name varchar(50))
+
+if exists (select 1 from sys.dm_xe_sessions where name = 'AlwaysOn_health')
+	begin
+		SELECT @FileName = target_data.value('(EventFileTarget/File/@name)[1]','nvarchar(4000)')
+		FROM (
+				SELECT
+					CAST(target_data AS XML) target_data
+					FROM sys.dm_xe_sessions s
+					JOIN sys.dm_xe_session_targets t
+						ON s.address = t.event_session_address
+					WHERE s.name = N'AlwaysOn_health'
+			) ft
+		insert into @events(dt,prev_state,curr_state,ar_name,ag_name)
+		SELECT 
+			XEData.value('(event/@timestamp)[1]','datetime2(3)') AS event_timestamp,
+			XEData.value('(event/data[@name="previous_state"]/text)[1]', 'varchar(255)') AS previous_state,
+			XEData.value('(event/data[@name="current_state"]/text)[1]', 'varchar(255)') AS current_state,
+			XEData.value('(event/data[@name="availability_replica_name"]/value)[1]', 'varchar(255)') AS availability_replica_name,
+			XEData.value('(event/data[@name="availability_group_name"]/value)[1]', 'varchar(255)') AS availability_group_name
+		FROM (
+				SELECT CAST(event_data AS XML) XEData, *
+				FROM sys.fn_xe_file_target_read_file(@FileName, NULL, NULL, NULL)
+				WHERE object_name = 'availability_replica_state_change'
+			 ) event_data
+		--WHERE 
+		--XEData.value('(event/data[@name="current_state"]/text)[1]', 'varchar(255)') in  ('PRIMARY_NORMAL','SECONDARY_NORMAL')
+		--and XEData.value('(event/@timestamp)[1]','datetime2(3)')&gt;=convert(date,getdate())
+		--ORDER BY event_timestamp DESC;
+end
+
+select dt [dt]
+	,'&lt;= '+curr_state [state]
+	,ar_name [arname]
+	,ag_name [agname]
+	--,sum(case when dt&gt;=convert(date,getdate()) then 1 else 0 end) [issuestoday]
+from @events
+--group by dt 
+--	,'&lt;= '+curr_state 
+--	,ar_name
+--	,ag_name
+
+union all 
+
+select 
+	getdate() 
+	,case 
+		when gs.primary_recovery_health is not null then 'PRIMARY'  
+		else 'SECONDARY' 
+	end 
+	+char(10)+
+	lower(gs.synchronization_health_desc) [state]
+	,gs.primary_replica
+	,ag.name
+--	,0
+from sys.dm_hadr_availability_group_states  gs
+join sys.availability_groups ag on ag.group_id=gs.group_id
+
+order by dt desc 
+
+
+</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="dt">
+          <DataField>dt</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="state">
+          <DataField>state</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="arname">
+          <DataField>arname</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="agname">
+          <DataField>agname</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+      </Fields>
+    </DataSet>
+  </DataSets>
+  <ReportSections>
+    <ReportSection>
+      <Body>
+        <ReportItems>
+          <Tablix Name="Tablix1">
+            <TablixBody>
+              <TablixColumns>
+                <TablixColumn>
+                  <Width>3.95521cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>6.49521cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>5.04cm</Width>
+                </TablixColumn>
+              </TablixColumns>
+              <TablixRows>
+                <TablixRow>
+                  <Height>0.6cm</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox9">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Cluster</Value>
+                                  <Style>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox9</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <TopBorder>
+                              <Style>None</Style>
+                            </TopBorder>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox11">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Quorum</Value>
+                                  <Style>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox11</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <TopBorder>
+                              <Style>None</Style>
+                            </TopBorder>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox13">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>State</Value>
+                                  <Style>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox13</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <TopBorder>
+                              <Style>None</Style>
+                            </TopBorder>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+                <TablixRow>
+                  <Height>0.6cm</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="cluster_name">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!cluster_name.Value</Value>
+                                  <Style />
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>cluster_name</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <TopBorder>
+                              <Style>None</Style>
+                            </TopBorder>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="quorum_type_desc">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!quorum_type_desc.Value</Value>
+                                  <Style />
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>quorum_type_desc</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <TopBorder>
+                              <Style>None</Style>
+                            </TopBorder>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="quorum_state_desc">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!quorum_state_desc.Value</Value>
+                                  <Style />
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>quorum_state_desc</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <TopBorder>
+                              <Style>None</Style>
+                            </TopBorder>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+              </TablixRows>
+            </TablixBody>
+            <TablixColumnHierarchy>
+              <TablixMembers>
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+              </TablixMembers>
+            </TablixColumnHierarchy>
+            <TablixRowHierarchy>
+              <TablixMembers>
+                <TablixMember>
+                  <KeepWithGroup>After</KeepWithGroup>
+                </TablixMember>
+                <TablixMember>
+                  <Group Name="Details" />
+                </TablixMember>
+              </TablixMembers>
+            </TablixRowHierarchy>
+            <DataSetName>dsClusterInfo</DataSetName>
+            <Top>0.36724cm</Top>
+            <Left>0.55245cm</Left>
+            <Height>1.2cm</Height>
+            <Width>15.49042cm</Width>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+            </Style>
+          </Tablix>
+          <Tablix Name="Tablix2">
+            <TablixBody>
+              <TablixColumns>
+                <TablixColumn>
+                  <Width>0.70083cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>5.54271cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>6.38937cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>5.95312cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>1.99729cm</Width>
+                </TablixColumn>
+              </TablixColumns>
+              <TablixRows>
+                <TablixRow>
+                  <Height>0.6cm</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox15">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>N</Value>
+                                  <Style>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox15</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <TopBorder>
+                              <Style>None</Style>
+                            </TopBorder>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox17">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Members</Value>
+                                  <Style>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox17</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <TopBorder>
+                              <Style>None</Style>
+                            </TopBorder>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox19">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Type</Value>
+                                  <Style>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox19</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <TopBorder>
+                              <Style>None</Style>
+                            </TopBorder>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox21">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>State</Value>
+                                  <Style>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox21</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <TopBorder>
+                              <Style>None</Style>
+                            </TopBorder>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox23">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Votes</Value>
+                                  <Style>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox23</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <TopBorder>
+                              <Style>None</Style>
+                            </TopBorder>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+                <TablixRow>
+                  <Height>0.6cm</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox16">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=RowNumber(Nothing)</Value>
+                                  <Style />
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox16</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <TopBorder>
+                              <Style>None</Style>
+                            </TopBorder>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="member_name">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!member_name.Value</Value>
+                                  <Style>
+                                    <TextDecoration>Underline</TextDecoration>
+                                    <Color>Blue</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>member_name</rd:DefaultName>
+                          <ActionInfo>
+                            <Actions>
+                              <Action>
+                                <Drillthrough>
+                                  <ReportName>=iif(InStr(Fields!member_name.Value," ")&lt;&gt;0,"Page404","QuickOverview")</ReportName>
+                                  <Parameters>
+                                    <Parameter Name="SQLServer">
+                                      <Value>=Fields!member_name.Value</Value>
+                                    </Parameter>
+                                  </Parameters>
+                                </Drillthrough>
+                              </Action>
+                            </Actions>
+                          </ActionInfo>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <TopBorder>
+                              <Style>None</Style>
+                            </TopBorder>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="member_type_desc">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!member_type_desc.Value</Value>
+                                  <Style />
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>member_type_desc</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <TopBorder>
+                              <Style>None</Style>
+                            </TopBorder>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="member_state_desc">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!member_state_desc.Value</Value>
+                                  <Style />
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>member_state_desc</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <TopBorder>
+                              <Style>None</Style>
+                            </TopBorder>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="number_of_quorum_votes">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!number_of_quorum_votes.Value</Value>
+                                  <Style />
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>number_of_quorum_votes</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <TopBorder>
+                              <Style>None</Style>
+                            </TopBorder>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+              </TablixRows>
+            </TablixBody>
+            <TablixColumnHierarchy>
+              <TablixMembers>
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+              </TablixMembers>
+            </TablixColumnHierarchy>
+            <TablixRowHierarchy>
+              <TablixMembers>
+                <TablixMember>
+                  <KeepWithGroup>After</KeepWithGroup>
+                </TablixMember>
+                <TablixMember>
+                  <Group Name="Details1" />
+                </TablixMember>
+              </TablixMembers>
+            </TablixRowHierarchy>
+            <DataSetName>dsClusterMembers</DataSetName>
+            <Top>1.95474cm</Top>
+            <Left>0.55245cm</Left>
+            <Height>1.2cm</Height>
+            <Width>20.58332cm</Width>
+            <ZIndex>1</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+            </Style>
+          </Tablix>
+          <Textbox Name="Textbox1">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>="Note: "+cstr(Sum(Fields!n.Value, "dsRepairedPages")) 
++ " pages repaired in "
++ cstr(CountRows("dsRepairedPages")) +" databases."</Value>
+                    <Style>
+                      <FontSize>12pt</FontSize>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style>
+                  <TextAlign>Right</TextAlign>
+                </Style>
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox1</rd:DefaultName>
+            <Top>0.36724cm</Top>
+            <Left>23.09495cm</Left>
+            <Height>0.6cm</Height>
+            <Width>11.86625cm</Width>
+            <ZIndex>2</ZIndex>
+            <Visibility>
+              <Hidden>=iif(CountRows("dsRepairedPages")=0,true,false)</Hidden>
+            </Visibility>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox10">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>Availability groups and Replicas</Value>
+                    <Style>
+                      <FontSize>12pt</FontSize>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox10</rd:DefaultName>
+            <Top>3.53493cm</Top>
+            <Left>0.55245cm</Left>
+            <Height>0.75875cm</Height>
+            <Width>9.93417cm</Width>
+            <ZIndex>3</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Tablix Name="Tablix5">
+            <TablixCorner>
+              <TablixCornerRows>
+                <TablixCornerRow>
+                  <TablixCornerCell>
+                    <CellContents>
+                      <Textbox Name="Textbox42">
+                        <CanGrow>true</CanGrow>
+                        <KeepTogether>true</KeepTogether>
+                        <Paragraphs>
+                          <Paragraph>
+                            <TextRuns>
+                              <TextRun>
+                                <Value>AG Name</Value>
+                                <Style>
+                                  <FontWeight>Bold</FontWeight>
+                                </Style>
+                              </TextRun>
+                            </TextRuns>
+                            <Style />
+                          </Paragraph>
+                        </Paragraphs>
+                        <rd:DefaultName>Textbox42</rd:DefaultName>
+                        <Style>
+                          <Border>
+                            <Color>LightGrey</Color>
+                            <Style>Solid</Style>
+                          </Border>
+                          <TopBorder>
+                            <Style>None</Style>
+                          </TopBorder>
+                          <LeftBorder>
+                            <Style>None</Style>
+                          </LeftBorder>
+                          <RightBorder>
+                            <Style>None</Style>
+                          </RightBorder>
+                          <BackgroundColor>WhiteSmoke</BackgroundColor>
+                          <PaddingLeft>2pt</PaddingLeft>
+                          <PaddingRight>2pt</PaddingRight>
+                          <PaddingTop>2pt</PaddingTop>
+                          <PaddingBottom>2pt</PaddingBottom>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixCornerCell>
+                  <TablixCornerCell>
+                    <CellContents>
+                      <Textbox Name="Textbox3">
+                        <CanGrow>true</CanGrow>
+                        <KeepTogether>true</KeepTogether>
+                        <Paragraphs>
+                          <Paragraph>
+                            <TextRuns>
+                              <TextRun>
+                                <Value>Listener</Value>
+                                <Style>
+                                  <FontFamily>Arial</FontFamily>
+                                  <FontWeight>Bold</FontWeight>
+                                </Style>
+                              </TextRun>
+                            </TextRuns>
+                            <Style>
+                              <TextAlign>Center</TextAlign>
+                            </Style>
+                          </Paragraph>
+                        </Paragraphs>
+                        <rd:DefaultName>Textbox3</rd:DefaultName>
+                        <ToolTip>Listeners</ToolTip>
+                        <Style>
+                          <Border>
+                            <Color>LightGrey</Color>
+                            <Style>Solid</Style>
+                          </Border>
+                          <TopBorder>
+                            <Style>None</Style>
+                          </TopBorder>
+                          <LeftBorder>
+                            <Style>None</Style>
+                          </LeftBorder>
+                          <RightBorder>
+                            <Style>None</Style>
+                          </RightBorder>
+                          <BackgroundColor>WhiteSmoke</BackgroundColor>
+                          <PaddingLeft>2pt</PaddingLeft>
+                          <PaddingRight>2pt</PaddingRight>
+                          <PaddingTop>2pt</PaddingTop>
+                          <PaddingBottom>2pt</PaddingBottom>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixCornerCell>
+                  <TablixCornerCell>
+                    <CellContents>
+                      <Textbox Name="Textbox2">
+                        <CanGrow>true</CanGrow>
+                        <KeepTogether>true</KeepTogether>
+                        <Paragraphs>
+                          <Paragraph>
+                            <TextRuns>
+                              <TextRun>
+                                <Value>DBs</Value>
+                                <Style>
+                                  <FontFamily>Arial</FontFamily>
+                                  <FontWeight>Bold</FontWeight>
+                                </Style>
+                              </TextRun>
+                            </TextRuns>
+                            <Style>
+                              <TextAlign>Center</TextAlign>
+                            </Style>
+                          </Paragraph>
+                        </Paragraphs>
+                        <rd:DefaultName>Textbox2</rd:DefaultName>
+                        <Style>
+                          <Border>
+                            <Color>LightGrey</Color>
+                            <Style>Solid</Style>
+                          </Border>
+                          <TopBorder>
+                            <Style>None</Style>
+                          </TopBorder>
+                          <LeftBorder>
+                            <Style>None</Style>
+                          </LeftBorder>
+                          <RightBorder>
+                            <Style>None</Style>
+                          </RightBorder>
+                          <BackgroundColor>WhiteSmoke</BackgroundColor>
+                          <PaddingLeft>2pt</PaddingLeft>
+                          <PaddingRight>2pt</PaddingRight>
+                          <PaddingTop>2pt</PaddingTop>
+                          <PaddingBottom>2pt</PaddingBottom>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixCornerCell>
+                  <TablixCornerCell>
+                    <CellContents>
+                      <Textbox Name="Textbox43">
+                        <CanGrow>true</CanGrow>
+                        <KeepTogether>true</KeepTogether>
+                        <Paragraphs>
+                          <Paragraph>
+                            <TextRuns>
+                              <TextRun>
+                                <Value>Mode</Value>
+                                <Style>
+                                  <FontFamily>Arial</FontFamily>
+                                  <FontWeight>Bold</FontWeight>
+                                </Style>
+                              </TextRun>
+                            </TextRuns>
+                            <Style>
+                              <TextAlign>Center</TextAlign>
+                            </Style>
+                          </Paragraph>
+                        </Paragraphs>
+                        <rd:DefaultName>Textbox43</rd:DefaultName>
+                        <Style>
+                          <Border>
+                            <Color>LightGrey</Color>
+                            <Style>Solid</Style>
+                          </Border>
+                          <TopBorder>
+                            <Style>None</Style>
+                          </TopBorder>
+                          <LeftBorder>
+                            <Style>None</Style>
+                          </LeftBorder>
+                          <RightBorder>
+                            <Style>None</Style>
+                          </RightBorder>
+                          <BackgroundColor>WhiteSmoke</BackgroundColor>
+                          <PaddingLeft>2pt</PaddingLeft>
+                          <PaddingRight>2pt</PaddingRight>
+                          <PaddingTop>2pt</PaddingTop>
+                          <PaddingBottom>2pt</PaddingBottom>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixCornerCell>
+                  <TablixCornerCell>
+                    <CellContents>
+                      <Textbox Name="Textbox47">
+                        <CanGrow>true</CanGrow>
+                        <KeepTogether>true</KeepTogether>
+                        <Paragraphs>
+                          <Paragraph>
+                            <TextRuns>
+                              <TextRun>
+                                <Value>Backup</Value>
+                                <Style>
+                                  <FontFamily>Arial</FontFamily>
+                                  <FontWeight>Bold</FontWeight>
+                                </Style>
+                              </TextRun>
+                            </TextRuns>
+                            <Style>
+                              <TextAlign>Center</TextAlign>
+                            </Style>
+                          </Paragraph>
+                        </Paragraphs>
+                        <rd:DefaultName>Textbox47</rd:DefaultName>
+                        <Style>
+                          <Border>
+                            <Color>LightGrey</Color>
+                            <Style>Solid</Style>
+                          </Border>
+                          <TopBorder>
+                            <Style>None</Style>
+                          </TopBorder>
+                          <LeftBorder>
+                            <Style>None</Style>
+                          </LeftBorder>
+                          <RightBorder>
+                            <Style>None</Style>
+                          </RightBorder>
+                          <BackgroundColor>WhiteSmoke</BackgroundColor>
+                          <PaddingLeft>2pt</PaddingLeft>
+                          <PaddingRight>2pt</PaddingRight>
+                          <PaddingTop>2pt</PaddingTop>
+                          <PaddingBottom>2pt</PaddingBottom>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixCornerCell>
+                  <TablixCornerCell>
+                    <CellContents>
+                      <Textbox Name="Textbox5">
+                        <CanGrow>true</CanGrow>
+                        <KeepTogether>true</KeepTogether>
+                        <Paragraphs>
+                          <Paragraph>
+                            <TextRuns>
+                              <TextRun>
+                                <Value>Timeout</Value>
+                                <Style>
+                                  <FontFamily>Arial</FontFamily>
+                                  <FontWeight>Bold</FontWeight>
+                                </Style>
+                              </TextRun>
+                            </TextRuns>
+                            <Style>
+                              <TextAlign>Center</TextAlign>
+                            </Style>
+                          </Paragraph>
+                          <Paragraph>
+                            <TextRuns>
+                              <TextRun>
+                                <Value>(s)</Value>
+                                <Style>
+                                  <FontFamily>Arial</FontFamily>
+                                  <FontWeight>Bold</FontWeight>
+                                </Style>
+                              </TextRun>
+                            </TextRuns>
+                            <Style>
+                              <TextAlign>Center</TextAlign>
+                            </Style>
+                          </Paragraph>
+                        </Paragraphs>
+                        <rd:DefaultName>Textbox5</rd:DefaultName>
+                        <ToolTip>="The HealthCheckTimeout setting is used to specify the length of time, that the SQL Server resource DLL should wait (sp_server_diagnostics) before reporting the Always On Failover Cluster Instance (FCI) as unresponsive. "
++chr(10)+"The default value for this property is 30,000 milliseconds (30 seconds). The minimum value is 15,000 milliseconds (15 seconds)."</ToolTip>
+                        <Style>
+                          <Border>
+                            <Color>LightGrey</Color>
+                            <Style>Solid</Style>
+                          </Border>
+                          <TopBorder>
+                            <Style>None</Style>
+                          </TopBorder>
+                          <LeftBorder>
+                            <Style>None</Style>
+                          </LeftBorder>
+                          <RightBorder>
+                            <Style>None</Style>
+                          </RightBorder>
+                          <BackgroundColor>WhiteSmoke</BackgroundColor>
+                          <PaddingLeft>2pt</PaddingLeft>
+                          <PaddingRight>2pt</PaddingRight>
+                          <PaddingTop>2pt</PaddingTop>
+                          <PaddingBottom>2pt</PaddingBottom>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixCornerCell>
+                  <TablixCornerCell>
+                    <CellContents>
+                      <Textbox Name="Textbox7">
+                        <CanGrow>true</CanGrow>
+                        <KeepTogether>true</KeepTogether>
+                        <Paragraphs>
+                          <Paragraph>
+                            <TextRuns>
+                              <TextRun>
+                                <Value>Failover</Value>
+                                <Style>
+                                  <FontFamily>Arial</FontFamily>
+                                  <FontWeight>Bold</FontWeight>
+                                </Style>
+                              </TextRun>
+                            </TextRuns>
+                            <Style>
+                              <TextAlign>Center</TextAlign>
+                            </Style>
+                          </Paragraph>
+                          <Paragraph>
+                            <TextRuns>
+                              <TextRun>
+                                <Value>Condition</Value>
+                                <Style>
+                                  <FontFamily>Arial</FontFamily>
+                                  <FontWeight>Bold</FontWeight>
+                                </Style>
+                              </TextRun>
+                            </TextRuns>
+                            <Style>
+                              <TextAlign>Center</TextAlign>
+                            </Style>
+                          </Paragraph>
+                        </Paragraphs>
+                        <rd:DefaultName>Textbox7</rd:DefaultName>
+                        <Style>
+                          <Border>
+                            <Color>LightGrey</Color>
+                            <Style>Solid</Style>
+                          </Border>
+                          <TopBorder>
+                            <Style>None</Style>
+                          </TopBorder>
+                          <LeftBorder>
+                            <Style>None</Style>
+                          </LeftBorder>
+                          <RightBorder>
+                            <Style>None</Style>
+                          </RightBorder>
+                          <BackgroundColor>WhiteSmoke</BackgroundColor>
+                          <PaddingLeft>2pt</PaddingLeft>
+                          <PaddingRight>2pt</PaddingRight>
+                          <PaddingTop>2pt</PaddingTop>
+                          <PaddingBottom>2pt</PaddingBottom>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixCornerCell>
+                </TablixCornerRow>
+              </TablixCornerRows>
+            </TablixCorner>
+            <TablixBody>
+              <TablixColumns>
+                <TablixColumn>
+                  <Width>2.84396cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>1.81271cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>1.81208cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>1.84615cm</Width>
+                </TablixColumn>
+              </TablixColumns>
+              <TablixRows>
+                <TablixRow>
+                  <Height>0.52063cm</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="role_desc1">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!role_desc.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>role_desc1</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="operational_state_desc">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=iif(isNothing(Fields!operational_state_desc.Value)=false,lcase(Fields!operational_state_desc.Value),Nothing)</Value>
+                                  <Style>
+                                    <FontFamily>Arial</FontFamily>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>operational_state_desc</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="connected_state_desc">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=iif(isnothing(Fields!connected_state_desc.Value)=false,lcase(Fields!connected_state_desc.Value),nothing)</Value>
+                                  <Style>
+                                    <FontFamily>Arial</FontFamily>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>connected_state_desc</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="synchronization_health_desc">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=iif(isNothing(Fields!synchronization_health_desc.Value)=false,lcase(Fields!synchronization_health_desc.Value),Nothing)</Value>
+                                  <Style>
+                                    <FontFamily>Arial</FontFamily>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>synchronization_health_desc</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>=iif(Fields!role_desc.Value=""
+	,"WhiteSmoke"
+	,iif(Fields!synchronization_health_desc.Value&lt;&gt;"HEALTHY"
+		,"Tomato"
+		,"White"
+		)
+	)</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+              </TablixRows>
+            </TablixBody>
+            <TablixColumnHierarchy>
+              <TablixMembers>
+                <TablixMember>
+                  <Group Name="replica_server_name1">
+                    <GroupExpressions>
+                      <GroupExpression>=Fields!replica_server_name.Value</GroupExpression>
+                    </GroupExpressions>
+                  </Group>
+                  <SortExpressions>
+                    <SortExpression>
+                      <Value>=Fields!replica_server_name.Value</Value>
+                    </SortExpression>
+                  </SortExpressions>
+                  <TablixHeader>
+                    <Size>0.6cm</Size>
+                    <CellContents>
+                      <Textbox Name="replica_server_name1">
+                        <CanGrow>true</CanGrow>
+                        <KeepTogether>true</KeepTogether>
+                        <Paragraphs>
+                          <Paragraph>
+                            <TextRuns>
+                              <TextRun>
+                                <Value>=Fields!replica_server_name.Value</Value>
+                                <Style>
+                                  <FontWeight>Bold</FontWeight>
+                                </Style>
+                              </TextRun>
+                            </TextRuns>
+                            <Style>
+                              <TextAlign>Center</TextAlign>
+                            </Style>
+                          </Paragraph>
+                        </Paragraphs>
+                        <rd:DefaultName>replica_server_name1</rd:DefaultName>
+                        <Style>
+                          <Border>
+                            <Color>LightGrey</Color>
+                            <Style>Solid</Style>
+                          </Border>
+                          <TopBorder>
+                            <Style>None</Style>
+                          </TopBorder>
+                          <BackgroundColor>=iif(lcase(Fields!replica_server_name.Value)=lcase(Parameters!SQLServer.Value)
+	,"Khaki"
+	,"WhiteSmoke"
+	)</BackgroundColor>
+                          <VerticalAlign>Middle</VerticalAlign>
+                          <PaddingLeft>2pt</PaddingLeft>
+                          <PaddingRight>2pt</PaddingRight>
+                          <PaddingTop>2pt</PaddingTop>
+                          <PaddingBottom>2pt</PaddingBottom>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixHeader>
+                  <TablixMembers>
+                    <TablixMember />
+                    <TablixMember />
+                    <TablixMember />
+                    <TablixMember />
+                  </TablixMembers>
+                </TablixMember>
+              </TablixMembers>
+            </TablixColumnHierarchy>
+            <TablixRowHierarchy>
+              <TablixMembers>
+                <TablixMember>
+                  <Group Name="name">
+                    <GroupExpressions>
+                      <GroupExpression>=Fields!name.Value</GroupExpression>
+                    </GroupExpressions>
+                  </Group>
+                  <SortExpressions>
+                    <SortExpression>
+                      <Value>=Fields!name.Value</Value>
+                    </SortExpression>
+                  </SortExpressions>
+                  <TablixMembers>
+                    <TablixMember>
+                      <TablixHeader>
+                        <Size>5.08cm</Size>
+                        <CellContents>
+                          <Textbox Name="name">
+                            <CanGrow>true</CanGrow>
+                            <KeepTogether>true</KeepTogether>
+                            <Paragraphs>
+                              <Paragraph>
+                                <TextRuns>
+                                  <TextRun>
+                                    <Value>=Fields!name.Value</Value>
+                                    <Style>
+                                      <FontSize>8pt</FontSize>
+                                    </Style>
+                                  </TextRun>
+                                </TextRuns>
+                                <Style />
+                              </Paragraph>
+                            </Paragraphs>
+                            <rd:DefaultName>name</rd:DefaultName>
+                            <Style>
+                              <Border>
+                                <Color>LightGrey</Color>
+                                <Style>Solid</Style>
+                              </Border>
+                              <LeftBorder>
+                                <Style>None</Style>
+                              </LeftBorder>
+                              <RightBorder>
+                                <Style>None</Style>
+                              </RightBorder>
+                              <VerticalAlign>Middle</VerticalAlign>
+                              <PaddingLeft>2pt</PaddingLeft>
+                              <PaddingRight>2pt</PaddingRight>
+                              <PaddingTop>2pt</PaddingTop>
+                              <PaddingBottom>2pt</PaddingBottom>
+                            </Style>
+                          </Textbox>
+                        </CellContents>
+                      </TablixHeader>
+                      <TablixMembers>
+                        <TablixMember>
+                          <Group Name="Listeners">
+                            <GroupExpressions>
+                              <GroupExpression>=Fields!Listeners.Value</GroupExpression>
+                            </GroupExpressions>
+                          </Group>
+                          <SortExpressions>
+                            <SortExpression>
+                              <Value>=Fields!Listeners.Value</Value>
+                            </SortExpression>
+                          </SortExpressions>
+                          <TablixHeader>
+                            <Size>1.67916cm</Size>
+                            <CellContents>
+                              <Textbox Name="Listeners">
+                                <CanGrow>true</CanGrow>
+                                <KeepTogether>true</KeepTogether>
+                                <Paragraphs>
+                                  <Paragraph>
+                                    <TextRuns>
+                                      <TextRun>
+                                        <Value>=Fields!Listeners.Value</Value>
+                                        <Style>
+                                          <FontSize>8pt</FontSize>
+                                        </Style>
+                                      </TextRun>
+                                    </TextRuns>
+                                    <Style>
+                                      <TextAlign>Center</TextAlign>
+                                    </Style>
+                                  </Paragraph>
+                                </Paragraphs>
+                                <rd:DefaultName>Listeners</rd:DefaultName>
+                                <ToolTip>=lookup(Fields!name.Value,Fields!agname.Value,Fields!listeners.Value, "dsListeners")</ToolTip>
+                                <Style>
+                                  <Border>
+                                    <Color>LightGrey</Color>
+                                    <Style>Solid</Style>
+                                  </Border>
+                                  <LeftBorder>
+                                    <Style>None</Style>
+                                  </LeftBorder>
+                                  <RightBorder>
+                                    <Style>None</Style>
+                                  </RightBorder>
+                                  <VerticalAlign>Middle</VerticalAlign>
+                                  <PaddingLeft>2pt</PaddingLeft>
+                                  <PaddingRight>2pt</PaddingRight>
+                                  <PaddingTop>2pt</PaddingTop>
+                                  <PaddingBottom>2pt</PaddingBottom>
+                                </Style>
+                              </Textbox>
+                            </CellContents>
+                          </TablixHeader>
+                          <TablixMembers>
+                            <TablixMember>
+                              <Group Name="DBs">
+                                <GroupExpressions>
+                                  <GroupExpression>=Fields!DBs.Value</GroupExpression>
+                                </GroupExpressions>
+                              </Group>
+                              <SortExpressions>
+                                <SortExpression>
+                                  <Value>=Fields!DBs.Value</Value>
+                                </SortExpression>
+                              </SortExpressions>
+                              <TablixHeader>
+                                <Size>1.28355cm</Size>
+                                <CellContents>
+                                  <Textbox Name="DBs">
+                                    <CanGrow>true</CanGrow>
+                                    <KeepTogether>true</KeepTogether>
+                                    <Paragraphs>
+                                      <Paragraph>
+                                        <TextRuns>
+                                          <TextRun>
+                                            <Value>=Fields!DBs.Value</Value>
+                                            <Style>
+                                              <FontFamily>Arial</FontFamily>
+                                              <FontSize>8pt</FontSize>
+                                            </Style>
+                                          </TextRun>
+                                        </TextRuns>
+                                        <Style>
+                                          <TextAlign>Center</TextAlign>
+                                        </Style>
+                                      </Paragraph>
+                                    </Paragraphs>
+                                    <rd:DefaultName>DBs</rd:DefaultName>
+                                    <Style>
+                                      <Border>
+                                        <Color>LightGrey</Color>
+                                        <Style>Solid</Style>
+                                      </Border>
+                                      <LeftBorder>
+                                        <Style>None</Style>
+                                      </LeftBorder>
+                                      <RightBorder>
+                                        <Style>None</Style>
+                                      </RightBorder>
+                                      <VerticalAlign>Middle</VerticalAlign>
+                                      <PaddingLeft>2pt</PaddingLeft>
+                                      <PaddingRight>2pt</PaddingRight>
+                                      <PaddingTop>2pt</PaddingTop>
+                                      <PaddingBottom>2pt</PaddingBottom>
+                                    </Style>
+                                  </Textbox>
+                                </CellContents>
+                              </TablixHeader>
+                              <TablixMembers>
+                                <TablixMember>
+                                  <Group Name="AvailabilityFailover1">
+                                    <GroupExpressions>
+                                      <GroupExpression>=Fields!AvailabilityFailover.Value</GroupExpression>
+                                    </GroupExpressions>
+                                  </Group>
+                                  <SortExpressions>
+                                    <SortExpression>
+                                      <Value>=Fields!AvailabilityFailover.Value</Value>
+                                    </SortExpression>
+                                  </SortExpressions>
+                                  <TablixHeader>
+                                    <Size>4.1804cm</Size>
+                                    <CellContents>
+                                      <Textbox Name="AvailabilityFailover1">
+                                        <CanGrow>true</CanGrow>
+                                        <KeepTogether>true</KeepTogether>
+                                        <Paragraphs>
+                                          <Paragraph>
+                                            <TextRuns>
+                                              <TextRun>
+                                                <Value>=lcase(Fields!AvailabilityFailover.Value)</Value>
+                                                <Style>
+                                                  <FontFamily>Arial</FontFamily>
+                                                  <FontSize>8pt</FontSize>
+                                                </Style>
+                                              </TextRun>
+                                            </TextRuns>
+                                            <Style>
+                                              <TextAlign>Center</TextAlign>
+                                            </Style>
+                                          </Paragraph>
+                                        </Paragraphs>
+                                        <rd:DefaultName>AvailabilityFailover1</rd:DefaultName>
+                                        <Style>
+                                          <Border>
+                                            <Color>LightGrey</Color>
+                                            <Style>Solid</Style>
+                                          </Border>
+                                          <LeftBorder>
+                                            <Style>None</Style>
+                                          </LeftBorder>
+                                          <RightBorder>
+                                            <Style>None</Style>
+                                          </RightBorder>
+                                          <PaddingLeft>2pt</PaddingLeft>
+                                          <PaddingRight>2pt</PaddingRight>
+                                          <PaddingTop>2pt</PaddingTop>
+                                          <PaddingBottom>2pt</PaddingBottom>
+                                        </Style>
+                                      </Textbox>
+                                    </CellContents>
+                                  </TablixHeader>
+                                  <TablixMembers>
+                                    <TablixMember>
+                                      <Group Name="automated_backup_preference_desc1">
+                                        <GroupExpressions>
+                                          <GroupExpression>=Fields!automated_backup_preference_desc.Value</GroupExpression>
+                                        </GroupExpressions>
+                                      </Group>
+                                      <SortExpressions>
+                                        <SortExpression>
+                                          <Value>=Fields!automated_backup_preference_desc.Value</Value>
+                                        </SortExpression>
+                                      </SortExpressions>
+                                      <TablixHeader>
+                                        <Size>2.12958cm</Size>
+                                        <CellContents>
+                                          <Textbox Name="automated_backup_preference_desc1">
+                                            <CanGrow>true</CanGrow>
+                                            <KeepTogether>true</KeepTogether>
+                                            <Paragraphs>
+                                              <Paragraph>
+                                                <TextRuns>
+                                                  <TextRun>
+                                                    <Value>=Fields!automated_backup_preference_desc.Value</Value>
+                                                    <Style>
+                                                      <FontFamily>Arial</FontFamily>
+                                                      <FontSize>8pt</FontSize>
+                                                    </Style>
+                                                  </TextRun>
+                                                </TextRuns>
+                                                <Style>
+                                                  <TextAlign>Center</TextAlign>
+                                                </Style>
+                                              </Paragraph>
+                                            </Paragraphs>
+                                            <rd:DefaultName>automated_backup_preference_desc1</rd:DefaultName>
+                                            <Style>
+                                              <Border>
+                                                <Color>LightGrey</Color>
+                                                <Style>Solid</Style>
+                                              </Border>
+                                              <LeftBorder>
+                                                <Style>None</Style>
+                                              </LeftBorder>
+                                              <RightBorder>
+                                                <Style>None</Style>
+                                              </RightBorder>
+                                              <VerticalAlign>Middle</VerticalAlign>
+                                              <PaddingLeft>2pt</PaddingLeft>
+                                              <PaddingRight>2pt</PaddingRight>
+                                              <PaddingTop>2pt</PaddingTop>
+                                              <PaddingBottom>2pt</PaddingBottom>
+                                            </Style>
+                                          </Textbox>
+                                        </CellContents>
+                                      </TablixHeader>
+                                      <TablixMembers>
+                                        <TablixMember>
+                                          <Group Name="timeout_s">
+                                            <GroupExpressions>
+                                              <GroupExpression>=Fields!timeout_s.Value</GroupExpression>
+                                            </GroupExpressions>
+                                          </Group>
+                                          <SortExpressions>
+                                            <SortExpression>
+                                              <Value>=Fields!timeout_s.Value</Value>
+                                            </SortExpression>
+                                          </SortExpressions>
+                                          <TablixHeader>
+                                            <Size>1.81208cm</Size>
+                                            <CellContents>
+                                              <Textbox Name="timeout_s">
+                                                <CanGrow>true</CanGrow>
+                                                <KeepTogether>true</KeepTogether>
+                                                <Paragraphs>
+                                                  <Paragraph>
+                                                    <TextRuns>
+                                                      <TextRun>
+                                                        <Value>=Fields!timeout_s.Value</Value>
+                                                        <Style>
+                                                          <FontFamily>Arial</FontFamily>
+                                                          <FontSize>8pt</FontSize>
+                                                        </Style>
+                                                      </TextRun>
+                                                    </TextRuns>
+                                                    <Style>
+                                                      <TextAlign>Center</TextAlign>
+                                                    </Style>
+                                                  </Paragraph>
+                                                </Paragraphs>
+                                                <rd:DefaultName>timeout_s</rd:DefaultName>
+                                                <Style>
+                                                  <Border>
+                                                    <Color>LightGrey</Color>
+                                                    <Style>Solid</Style>
+                                                  </Border>
+                                                  <LeftBorder>
+                                                    <Style>None</Style>
+                                                  </LeftBorder>
+                                                  <RightBorder>
+                                                    <Style>None</Style>
+                                                  </RightBorder>
+                                                  <VerticalAlign>Middle</VerticalAlign>
+                                                  <PaddingLeft>2pt</PaddingLeft>
+                                                  <PaddingRight>2pt</PaddingRight>
+                                                  <PaddingTop>2pt</PaddingTop>
+                                                  <PaddingBottom>2pt</PaddingBottom>
+                                                </Style>
+                                              </Textbox>
+                                            </CellContents>
+                                          </TablixHeader>
+                                          <TablixMembers>
+                                            <TablixMember>
+                                              <Group Name="AutomaticFailoverCondition">
+                                                <GroupExpressions>
+                                                  <GroupExpression>=Fields!AutomaticFailoverCondition.Value</GroupExpression>
+                                                </GroupExpressions>
+                                              </Group>
+                                              <SortExpressions>
+                                                <SortExpression>
+                                                  <Value>=Fields!AutomaticFailoverCondition.Value</Value>
+                                                </SortExpression>
+                                              </SortExpressions>
+                                              <TablixHeader>
+                                                <Size>1.81271cm</Size>
+                                                <CellContents>
+                                                  <Textbox Name="AutomaticFailoverCondition">
+                                                    <CanGrow>true</CanGrow>
+                                                    <KeepTogether>true</KeepTogether>
+                                                    <Paragraphs>
+                                                      <Paragraph>
+                                                        <TextRuns>
+                                                          <TextRun>
+                                                            <Value>=left(Fields!AutomaticFailoverCondition.Value,3)</Value>
+                                                            <Style>
+                                                              <FontFamily>Arial</FontFamily>
+                                                              <FontSize>8pt</FontSize>
+                                                            </Style>
+                                                          </TextRun>
+                                                        </TextRuns>
+                                                        <Style>
+                                                          <TextAlign>Center</TextAlign>
+                                                        </Style>
+                                                      </Paragraph>
+                                                    </Paragraphs>
+                                                    <rd:DefaultName>AutomaticFailoverCondition</rd:DefaultName>
+                                                    <ToolTip>=Fields!AutomaticFailoverCondition.Value</ToolTip>
+                                                    <Style>
+                                                      <Border>
+                                                        <Color>LightGrey</Color>
+                                                        <Style>Solid</Style>
+                                                      </Border>
+                                                      <LeftBorder>
+                                                        <Style>None</Style>
+                                                      </LeftBorder>
+                                                      <RightBorder>
+                                                        <Style>None</Style>
+                                                      </RightBorder>
+                                                      <VerticalAlign>Middle</VerticalAlign>
+                                                      <PaddingLeft>2pt</PaddingLeft>
+                                                      <PaddingRight>2pt</PaddingRight>
+                                                      <PaddingTop>2pt</PaddingTop>
+                                                      <PaddingBottom>2pt</PaddingBottom>
+                                                    </Style>
+                                                  </Textbox>
+                                                </CellContents>
+                                              </TablixHeader>
+                                            </TablixMember>
+                                          </TablixMembers>
+                                        </TablixMember>
+                                      </TablixMembers>
+                                    </TablixMember>
+                                  </TablixMembers>
+                                </TablixMember>
+                              </TablixMembers>
+                            </TablixMember>
+                          </TablixMembers>
+                        </TablixMember>
+                      </TablixMembers>
+                    </TablixMember>
+                  </TablixMembers>
+                </TablixMember>
+              </TablixMembers>
+            </TablixRowHierarchy>
+            <DataSetName>dsAvailabilityGroups</DataSetName>
+            <Top>4.47007cm</Top>
+            <Left>0.55245cm</Left>
+            <Height>1.12063cm</Height>
+            <Width>26.29238cm</Width>
+            <ZIndex>4</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+            </Style>
+          </Tablix>
+          <Tablix Name="Tablix3">
+            <TablixCorner>
+              <TablixCornerRows>
+                <TablixCornerRow>
+                  <TablixCornerCell>
+                    <CellContents>
+                      <Textbox Name="Textbox12">
+                        <CanGrow>true</CanGrow>
+                        <KeepTogether>true</KeepTogether>
+                        <Paragraphs>
+                          <Paragraph>
+                            <TextRuns>
+                              <TextRun>
+                                <Value>History of State Changes</Value>
+                                <Style>
+                                  <FontSize>12pt</FontSize>
+                                  <FontWeight>Bold</FontWeight>
+                                </Style>
+                              </TextRun>
+                            </TextRuns>
+                            <Style />
+                          </Paragraph>
+                        </Paragraphs>
+                        <rd:DefaultName>Textbox12</rd:DefaultName>
+                        <Style>
+                          <Border>
+                            <Color>LightGrey</Color>
+                            <Style>Solid</Style>
+                          </Border>
+                          <LeftBorder>
+                            <Style>None</Style>
+                          </LeftBorder>
+                          <RightBorder>
+                            <Style>None</Style>
+                          </RightBorder>
+                          <BackgroundColor>WhiteSmoke</BackgroundColor>
+                          <PaddingLeft>2pt</PaddingLeft>
+                          <PaddingRight>2pt</PaddingRight>
+                          <PaddingTop>2pt</PaddingTop>
+                          <PaddingBottom>2pt</PaddingBottom>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixCornerCell>
+                </TablixCornerRow>
+              </TablixCornerRows>
+            </TablixCorner>
+            <TablixBody>
+              <TablixColumns>
+                <TablixColumn>
+                  <Width>4.66896cm</Width>
+                </TablixColumn>
+              </TablixColumns>
+              <TablixRows>
+                <TablixRow>
+                  <Height>0.49417cm</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="state">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!state.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>state</rd:DefaultName>
+                          <ToolTip>=Fields!arname.Value</ToolTip>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>=iif(InStr(Fields!state.Value,"not_healthy")&gt;0,"Tomato","White")</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+              </TablixRows>
+            </TablixBody>
+            <TablixColumnHierarchy>
+              <TablixMembers>
+                <TablixMember>
+                  <Group Name="dt">
+                    <GroupExpressions>
+                      <GroupExpression>=Fields!dt.Value</GroupExpression>
+                    </GroupExpressions>
+                  </Group>
+                  <SortExpressions>
+                    <SortExpression>
+                      <Value>=Fields!dt.Value</Value>
+                      <Direction>Descending</Direction>
+                    </SortExpression>
+                  </SortExpressions>
+                  <TablixHeader>
+                    <Size>0.6cm</Size>
+                    <CellContents>
+                      <Textbox Name="dt">
+                        <CanGrow>true</CanGrow>
+                        <KeepTogether>true</KeepTogether>
+                        <Paragraphs>
+                          <Paragraph>
+                            <TextRuns>
+                              <TextRun>
+                                <Value>=format(Fields!dt.Value,"dd MMMM")+chr(10)+format(Fields!dt.Value,"HH:mm")</Value>
+                                <Style>
+                                  <FontSize>8pt</FontSize>
+                                  <FontWeight>Bold</FontWeight>
+                                </Style>
+                              </TextRun>
+                            </TextRuns>
+                            <Style>
+                              <TextAlign>Center</TextAlign>
+                            </Style>
+                          </Paragraph>
+                        </Paragraphs>
+                        <rd:DefaultName>dt</rd:DefaultName>
+                        <ToolTip>=choose(Weekday(Fields!dt.Value)-1,"Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday")</ToolTip>
+                        <Style>
+                          <Border>
+                            <Color>LightGrey</Color>
+                            <Style>Solid</Style>
+                          </Border>
+                          <LeftBorder>
+                            <Style>None</Style>
+                          </LeftBorder>
+                          <RightBorder>
+                            <Style>None</Style>
+                          </RightBorder>
+                          <BackgroundColor>WhiteSmoke</BackgroundColor>
+                          <VerticalAlign>Middle</VerticalAlign>
+                          <PaddingLeft>2pt</PaddingLeft>
+                          <PaddingRight>2pt</PaddingRight>
+                          <PaddingTop>2pt</PaddingTop>
+                          <PaddingBottom>2pt</PaddingBottom>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixHeader>
+                </TablixMember>
+              </TablixMembers>
+            </TablixColumnHierarchy>
+            <TablixRowHierarchy>
+              <TablixMembers>
+                <TablixMember>
+                  <Group Name="agname">
+                    <GroupExpressions>
+                      <GroupExpression>=Fields!agname.Value</GroupExpression>
+                    </GroupExpressions>
+                  </Group>
+                  <SortExpressions>
+                    <SortExpression>
+                      <Value>=Fields!agname.Value</Value>
+                    </SortExpression>
+                  </SortExpressions>
+                  <TablixHeader>
+                    <Size>5.26521cm</Size>
+                    <CellContents>
+                      <Textbox Name="agname">
+                        <CanGrow>true</CanGrow>
+                        <KeepTogether>true</KeepTogether>
+                        <Paragraphs>
+                          <Paragraph>
+                            <TextRuns>
+                              <TextRun>
+                                <Value>=Fields!agname.Value</Value>
+                                <Style>
+                                  <FontSize>8pt</FontSize>
+                                </Style>
+                              </TextRun>
+                            </TextRuns>
+                            <Style>
+                              <TextAlign>Left</TextAlign>
+                            </Style>
+                          </Paragraph>
+                        </Paragraphs>
+                        <rd:DefaultName>agname</rd:DefaultName>
+                        <Style>
+                          <Border>
+                            <Color>LightGrey</Color>
+                            <Style>Solid</Style>
+                          </Border>
+                          <LeftBorder>
+                            <Style>None</Style>
+                          </LeftBorder>
+                          <RightBorder>
+                            <Style>None</Style>
+                          </RightBorder>
+                          <VerticalAlign>Middle</VerticalAlign>
+                          <PaddingLeft>2pt</PaddingLeft>
+                          <PaddingRight>2pt</PaddingRight>
+                          <PaddingTop>2pt</PaddingTop>
+                          <PaddingBottom>2pt</PaddingBottom>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixHeader>
+                </TablixMember>
+              </TablixMembers>
+            </TablixRowHierarchy>
+            <DataSetName>dsARStateChange</DataSetName>
+            <Top>7.18822cm</Top>
+            <Left>0.55245cm</Left>
+            <Height>1.09417cm</Height>
+            <Width>9.93417cm</Width>
+            <ZIndex>5</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+            </Style>
+          </Tablix>
+        </ReportItems>
+        <Height>4.91667in</Height>
+        <Style />
+      </Body>
+      <Width>14.30209in</Width>
+      <Page>
+        <PageHeader>
+          <Height>1.71801cm</Height>
+          <PrintOnFirstPage>true</PrintOnFirstPage>
+          <PrintOnLastPage>true</PrintOnLastPage>
+          <ReportItems>
+            <Textbox Name="Textbox29">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>SQL Server :</Value>
+                      <Style>
+                        <FontSize>12pt</FontSize>
+                        <FontWeight>Bold</FontWeight>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style>
+                    <TextAlign>Right</TextAlign>
+                  </Style>
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>Textbox29</rd:DefaultName>
+              <Top>0.05in</Top>
+              <Left>1.35776in</Left>
+              <Height>0.25in</Height>
+              <Width>1.34028in</Width>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>LightSkyBlue</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Textbox Name="SQLServer">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>=Parameters!SQLServer.Value</Value>
+                      <Style>
+                        <FontSize>12pt</FontSize>
+                        <FontWeight>Bold</FontWeight>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style>
+                    <TextAlign>Left</TextAlign>
+                  </Style>
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>SQLServer</rd:DefaultName>
+              <Top>0.05in</Top>
+              <Left>2.81609in</Left>
+              <Height>0.25in</Height>
+              <Width>3.5in</Width>
+              <ZIndex>1</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>LightSkyBlue</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Textbox Name="Textbox30">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>Report generated:</Value>
+                      <Style>
+                        <FontSize>8pt</FontSize>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style>
+                    <TextAlign>Right</TextAlign>
+                  </Style>
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>Textbox29</rd:DefaultName>
+              <Top>0.09525cm</Top>
+              <Left>9.51117in</Left>
+              <Height>0.1875in</Height>
+              <Width>1.44792in</Width>
+              <ZIndex>2</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Textbox Name="Textbox28">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>=format(Now(),"dd MMM yyyy HH:mm")</Value>
+                      <Style>
+                        <FontSize>8pt</FontSize>
+                        <Format>dddd, MMMM d, yyyy h:mm:ss tt</Format>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style>
+                    <TextAlign>Left</TextAlign>
+                  </Style>
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>Textbox28</rd:DefaultName>
+              <Top>0.09525cm</Top>
+              <Left>11.02159in</Left>
+              <Height>0.1875in</Height>
+              <Width>2.21181in</Width>
+              <ZIndex>3</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>WhiteSmoke</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Textbox Name="Textbox31">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>AlwaysOn Configuration</Value>
+                      <Style>
+                        <FontSize>12pt</FontSize>
+                        <FontWeight>Bold</FontWeight>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style>
+                    <TextAlign>Center</TextAlign>
+                  </Style>
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>Textbox29</rd:DefaultName>
+              <Top>0.34444in</Top>
+              <Left>1.35776in</Left>
+              <Height>0.30069in</Height>
+              <Width>4.95833in</Width>
+              <ZIndex>4</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>LightSkyBlue</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Image Name="Image1">
+              <Source>Embedded</Source>
+              <Value>back_button</Value>
+              <Sizing>FitProportional</Sizing>
+              <ActionInfo>
+                <Actions>
+                  <Action>
+                    <Drillthrough>
+                      <ReportName>QuickOverview</ReportName>
+                      <Parameters>
+                        <Parameter Name="SQLServer">
+                          <Value>=Parameters!SQLServer.Value</Value>
+                        </Parameter>
+                      </Parameters>
+                    </Drillthrough>
+                  </Action>
+                </Actions>
+              </ActionInfo>
+              <Top>0.0762cm</Top>
+              <Left>0.0762cm</Left>
+              <Height>1.5cm</Height>
+              <Width>1.5cm</Width>
+              <ZIndex>5</ZIndex>
+              <ToolTip>Back</ToolTip>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+              </Style>
+            </Image>
+          </ReportItems>
+          <Style>
+            <Border>
+              <Style>None</Style>
+            </Border>
+            <BackgroundColor>WhiteSmoke</BackgroundColor>
+          </Style>
+        </PageHeader>
+        <PageHeight>29.7cm</PageHeight>
+        <PageWidth>21cm</PageWidth>
+        <LeftMargin>2cm</LeftMargin>
+        <RightMargin>2cm</RightMargin>
+        <TopMargin>2cm</TopMargin>
+        <BottomMargin>2cm</BottomMargin>
+        <ColumnSpacing>0.13cm</ColumnSpacing>
+        <Style />
+      </Page>
+    </ReportSection>
+  </ReportSections>
+  <ReportParameters>
+    <ReportParameter Name="SQLServer">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>localhost\sql17</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>SQLServer</Prompt>
+    </ReportParameter>
+  </ReportParameters>
+  <ReportParametersLayout>
+    <GridLayoutDefinition>
+      <NumberOfColumns>4</NumberOfColumns>
+      <NumberOfRows>2</NumberOfRows>
+      <CellDefinitions>
+        <CellDefinition>
+          <ColumnIndex>0</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>SQLServer</ParameterName>
+        </CellDefinition>
+      </CellDefinitions>
+    </GridLayoutDefinition>
+  </ReportParametersLayout>
+  <EmbeddedImages>
+    <EmbeddedImage Name="back_button">
+      <MIMEType>image/png</MIMEType>
+      <ImageData>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</ImageData>
+    </EmbeddedImage>
+  </EmbeddedImages>
+  <rd:ReportUnitType>Cm</rd:ReportUnitType>
+  <rd:ReportID>1a1bef52-09df-4a6f-98ba-64b2e03e719f</rd:ReportID>
+</Report>
