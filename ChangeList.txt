@@ -1,3 +1,86 @@
+
+[31/12/2018]
+ -  [SQLErrorlogs]
+	* integration with Google is added - click on errornumber and you will be redirected to Google.
+ -  [SSRS_v2]
+	* new SSRS main report is under construction
+
+[27/12/2018]
+ -  [QuickOverview] 
+	* fixed issue with reading errorlogs (using xp_readerrorlog) on SQL2008 & SQL2008R2.
+ -  [Historical_Waits]
+	* redesign of the report
+
+[19/12/2018]
+ -  [SQLJob_Details]
+	* main query has been optimized (4 times faster now)
+	* main part of the report has been rebuilt using tablix and sparklines converted into normal graph
+	* added conditional formatting (minor)
+
+[18/12/2018]
+ -  [QuickOverview] 
+	* added support for multiple ReportServer databases
+
+[17/12/2018]
+ -  [OH_IndexMaintenanceLog]
+	* added new parameters "Day of Run", "Target DB", "DB Object" and "Activity".
+ -  [QuickOverview] 
+	* Proc cache section has got 2nd graph with execution plans per hour.
+	* Database files latency has been removed from the report.
+ -  [CPUStats] report became auto-reshreshing (1 sec).
+ -  [DBFileLatency] report has been created to show database files latency. This info has been removed from [QuickOverview] report and it's on a separate report.
+ -  [CPUStats] minor visual enhancements.
+
+[13/12/2018]
+ -  [PerfmonCounters]
+	* Autorefresh is enabled. Now it can serve as a monitoring tool! Default parameters allow report to save data for 6 sec each 30 secs.
+
+[11/12/2018]
+ -  [PerfmonCounters]
+	* "Procedure cache hits (%)" has been rebuilt with matrix and sparklines. Dynamic coloring is added (red/green).
+	* "Wait Statisctics" section has got new graph with amount of tasks waited and total wait time per measurement.
+	* all "flag_*" parameters made hidden to simplify parameters section
+
+[07/12/2018]
+ -  [WhoUsesServer]
+	* Fixed issue with max recusion limit 100 (default).
+	* Enhanced filters - selected value affects content of neighbour tables
+
+[04/12/2018]
+ -  [PerfmonCounters] 
+	* added support for "Pick a saved time" menu - it's possible to see per minute data if it's available; new data is not being collected at that moment.
+	* added new graph "DB Read/Write IO (KBs)" which shows non-zero IO happened on databases during monitoring time.
+
+[03/12/2018]
+ -  [DBSummary]
+	* added detection of SKU features per db (db id is highlighted by orange + tooltip message)
+ -  [PerfmonCounters]
+	* added "Transactions/sec (tempdb)"  and "Transactions/sec (other dbs)" counters. They share the same graph with "Batch Requests/sec" counter.
+
+[29/11/2018]
+ -  [DBInformation_Objects] report is created to show which db objects are in which db files.
+ -  [DBInformation] 
+	* added column "DB Objects" with object types and amount, which is linked to DBInformation_Objects report.
+ -  [DBFiles]
+	* added column "DB Objects", which is linked to DBInformation_Objects report.
+
+[26/11/2018]
+ -  [DBSummary] 
+	* DB Scoped config is being compared with the one of master db. In case of discrepancies, the appropriate databases are highlighted by orange.
+
+[20/11/2018]
+ - [WhoUsesServer] 
+	* Added graph with available days and ability to see data per day (filters).
+ - [SQLJobs_Matrix] 
+	* Main query has been optimized which helped to get results 4+ times faster (2s vs 9s).
+
+[15/11/2018]
+ - [QuickOverview] 
+	*  Section "SQL Jobs" column "Failed" now has ToolTip message with list of failed jobs and runs in square brackets.
+
+[14/11/2018]
+ - [OH_IndexMaintenanceLog] report is created to help to analyze output of Ola Hallegren's Index Maintenance Solution.
+
 [08/11/2018] 
 AS:
  - [SQLJobs_Matrix] 
