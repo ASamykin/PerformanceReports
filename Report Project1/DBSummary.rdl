@@ -5,7 +5,7 @@
     <DataSource Name="DataSource1">
       <ConnectionProperties>
         <DataProvider>SQL</DataProvider>
-        <ConnectString>="Data Source="+Parameters!SQLServer.Value + ";Initial Catalog=master"</ConnectString>
+        <ConnectString>="Data Source="+Parameters!SQLServer.Value + ";Initial Catalog=master;Application Name=Report:"+Globals!ReportName</ConnectString>
         <IntegratedSecurity>true</IntegratedSecurity>
       </ConnectionProperties>
       <rd:SecurityType>Integrated</rd:SecurityType>
@@ -712,6 +712,103 @@ option (recompile)</CommandText>
         </Field>
         <Field Name="server_name">
           <DataField>server_name</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="dsScopedConfig">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <CommandText>DECLARE @tbl TABLE (
+	db VARCHAR(255)
+	,conf_id SMALLINT
+	,NAME VARCHAR(100)
+	,val_pri VARCHAR(100)
+	,val_sec VARCHAR(100)
+	);
+
+IF object_id('sys.database_scoped_configurations') IS NOT NULL
+	INSERT INTO @tbl (
+		db
+		,conf_id
+		,NAME
+		,val_pri
+		,val_sec
+		)
+	EXEC sp_MSforeachdb 'use [?]; select 
+	db_name()
+	, configuration_id
+	,name
+	,convert(varchar(100),value)
+	,convert(varchar(100),case 
+		when name in (''LEGACY_CARDINALITY_ESTIMATION'',''PARAMETER_SNIFFING'',''QUERY_OPTIMIZER_HOTFIXES'') then isnull(value_for_secondary,2) 
+		else value_for_secondary
+	end) [value_for_secondary]
+	from sys.database_scoped_configurations';
+
+WITH data
+AS (
+	SELECT t2.db
+		,t2.conf_id
+		,t2.NAME + quotename(CASE 
+				WHEN (
+						t2.val_pri &lt;&gt; t1.val_pri
+						AND t2.val_sec &lt;&gt; t1.val_sec
+						)
+					THEN t2.val_pri + ',' + t2.val_sec
+				WHEN t2.val_pri &lt;&gt; t1.val_pri
+					THEN t2.val_pri
+				WHEN t2.val_sec &lt;&gt; t1.val_sec
+					THEN t2.val_sec
+				END) [params]
+	FROM @tbl t1
+	JOIN @tbl t2 ON t1.conf_id = t2.conf_id
+		AND t1.db = 'master'
+	WHERE t2.val_pri &lt;&gt; t1.val_pri
+		OR t2.val_sec &lt;&gt; t1.val_sec
+	)
+--, data2 as (
+SELECT t1.db
+	,replace(stuff((
+				SELECT ', ' + t2.params [data()]
+				FROM data t2
+				WHERE t2.db = t1.db
+				FOR XML path('')
+				), 1, 2, ''), ' , ', ', ') [parameters]
+FROM data t1
+GROUP BY t1.db</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="db">
+          <DataField>db</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="parameters">
+          <DataField>parameters</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="dsSKUFeatures">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <CommandText>declare @pf table (db varchar(255),feat varchar(255))
+
+insert into @pf (db,feat)
+exec sp_MSforeachdb 'select ''?'' [db],feature_name from  [?].sys.dm_db_persisted_sku_features'
+
+select distinct
+	t1.db
+	,(select char(10)+'- '+t2.feat as [data()] from @pf t2 where t2.db=t1.db for xml path('')) [feats]
+from @pf t1 </CommandText>
+      </Query>
+      <Fields>
+        <Field Name="db">
+          <DataField>db</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="feats">
+          <DataField>feats</DataField>
           <rd:UserDefined>true</rd:UserDefined>
         </Field>
       </Fields>
@@ -1659,17 +1756,31 @@ option (recompile)</CommandText>
                             </Paragraph>
                           </Paragraphs>
                           <rd:DefaultName>database_id</rd:DefaultName>
+                          <ToolTip>=iif(isNothing(lookup(Fields!name.Value,Fields!db.Value,Fields!parameters.Value,"dsScopedConfig"))=false
+	,"DB Scoped config: "+chr(10)+lookup(Fields!name.Value,Fields!db.Value,Fields!parameters.Value,"dsScopedConfig")
+	,Nothing)
++iif(isNothing(lookup(Fields!name.Value,Fields!db.Value,Fields!feats.Value,"dsSKUFeatures"))=false
+	,chr(10)+"SKU Features:"+lookup(Fields!name.Value,Fields!db.Value,Fields!feats.Value,"dsSKUFeatures")
+	,"")</ToolTip>
                           <Style>
                             <Border>
                               <Color>LightGrey</Color>
                               <Style>Solid</Style>
                             </Border>
+                            <BackgroundColor>=iif(isNothing(lookup(Fields!name.Value,Fields!db.Value,Fields!parameters.Value,"dsScopedConfig"))=true
+			,iif(isNothing(lookup(Fields!name.Value,Fields!db.Value,Fields!feats.Value,"dsSKUFeatures"))=true
+				,"White"
+				,"Orange"
+				)
+			,"Orange"
+	)</BackgroundColor>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
                         </Textbox>
+                        <rd:Selected>true</rd:Selected>
                       </CellContents>
                     </TablixCell>
                     <TablixCell>

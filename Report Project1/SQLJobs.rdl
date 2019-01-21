@@ -813,7 +813,9 @@ option (recompile,maxdop 1)</CommandText>
                                   </Style>
                                 </TextRun>
                               </TextRuns>
-                              <Style />
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
                             </Paragraph>
                           </Paragraphs>
                           <rd:DefaultName>Textbox7</rd:DefaultName>
@@ -2288,79 +2290,10 @@ mid(cstr(Fields!last_run_date.Value),5,2)+"-"
       <Width>41.02937cm</Width>
       <Page>
         <PageHeader>
-          <Height>1.65557cm</Height>
+          <Height>1.41703cm</Height>
           <PrintOnFirstPage>true</PrintOnFirstPage>
           <PrintOnLastPage>true</PrintOnLastPage>
           <ReportItems>
-            <Textbox Name="Textbox29">
-              <CanGrow>true</CanGrow>
-              <KeepTogether>true</KeepTogether>
-              <Paragraphs>
-                <Paragraph>
-                  <TextRuns>
-                    <TextRun>
-                      <Value>SQL Server :</Value>
-                      <Style>
-                        <FontSize>12pt</FontSize>
-                        <FontWeight>Bold</FontWeight>
-                      </Style>
-                    </TextRun>
-                  </TextRuns>
-                  <Style>
-                    <TextAlign>Right</TextAlign>
-                  </Style>
-                </Paragraph>
-              </Paragraphs>
-              <rd:DefaultName>Textbox29</rd:DefaultName>
-              <Top>0.05556in</Top>
-              <Left>0.87153in</Left>
-              <Height>0.25in</Height>
-              <Width>1.34028in</Width>
-              <Style>
-                <Border>
-                  <Style>None</Style>
-                </Border>
-                <BackgroundColor>LightSkyBlue</BackgroundColor>
-                <PaddingLeft>2pt</PaddingLeft>
-                <PaddingRight>2pt</PaddingRight>
-                <PaddingTop>2pt</PaddingTop>
-                <PaddingBottom>2pt</PaddingBottom>
-              </Style>
-            </Textbox>
-            <Textbox Name="SQLServer">
-              <CanGrow>true</CanGrow>
-              <KeepTogether>true</KeepTogether>
-              <Paragraphs>
-                <Paragraph>
-                  <TextRuns>
-                    <TextRun>
-                      <Value>=Parameters!SQLServer.Value</Value>
-                      <Style>
-                        <FontSize>12pt</FontSize>
-                        <FontWeight>Bold</FontWeight>
-                      </Style>
-                    </TextRun>
-                  </TextRuns>
-                  <Style />
-                </Paragraph>
-              </Paragraphs>
-              <rd:DefaultName>SQLServer</rd:DefaultName>
-              <Top>0.05556in</Top>
-              <Left>2.32986in</Left>
-              <Height>0.25in</Height>
-              <Width>4.04167in</Width>
-              <ZIndex>1</ZIndex>
-              <Style>
-                <Border>
-                  <Style>None</Style>
-                </Border>
-                <BackgroundColor>LightSkyBlue</BackgroundColor>
-                <PaddingLeft>2pt</PaddingLeft>
-                <PaddingRight>2pt</PaddingRight>
-                <PaddingTop>2pt</PaddingTop>
-                <PaddingBottom>2pt</PaddingBottom>
-              </Style>
-            </Textbox>
             <Textbox Name="txtReportCreated">
               <CanGrow>true</CanGrow>
               <KeepTogether>true</KeepTogether>
@@ -2368,33 +2301,32 @@ mid(cstr(Fields!last_run_date.Value),5,2)+"-"
                 <Paragraph>
                   <TextRuns>
                     <TextRun>
-                      <Value>= "Report created: "
-  + cstr(datepart(DateInterval.Day,globals!ExecutionTime))+ " "
+                      <Value>= 
+   cstr(datepart(DateInterval.Day,globals!ExecutionTime))+ " "
   + monthname(datepart(DateInterval.Month,globals!ExecutionTime),false)+ " "
   + cstr(datepart(DateInterval.Year,globals!ExecutionTime)) + " "
   + FormatDateTime(globals!ExecutionTime,dateformat.ShortTime)+":"
   + right(cstr(100+datepart(DateInterval.Second,globals!ExecutionTime)),2)</Value>
                       <Style>
+                        <FontSize>8pt</FontSize>
                         <FontWeight>Bold</FontWeight>
-                        <Color>Silver</Color>
                       </Style>
                     </TextRun>
                   </TextRuns>
                   <Style>
-                    <TextAlign>Right</TextAlign>
+                    <TextAlign>Center</TextAlign>
                   </Style>
                 </Paragraph>
               </Paragraphs>
               <Top>0.09734in</Top>
               <Left>13.08871in</Left>
-              <Height>0.25in</Height>
+              <Height>0.15846in</Height>
               <Width>2.90625in</Width>
-              <ZIndex>2</ZIndex>
               <Style>
                 <Border>
                   <Style>None</Style>
                 </Border>
-                <BackgroundColor>Gray</BackgroundColor>
+                <BackgroundColor>WhiteSmoke</BackgroundColor>
                 <PaddingLeft>2pt</PaddingLeft>
                 <PaddingRight>2pt</PaddingRight>
                 <PaddingTop>2pt</PaddingTop>
@@ -2410,42 +2342,7 @@ mid(cstr(Fields!last_run_date.Value),5,2)+"-"
                     <TextRun>
                       <Value>="Page " &amp; Globals!PageNumber &amp; " of " &amp; Globals!TotalPages</Value>
                       <Style>
-                        <FontWeight>Bold</FontWeight>
-                        <Color>Silver</Color>
-                      </Style>
-                    </TextRun>
-                  </TextRuns>
-                  <Style>
-                    <TextAlign>Right</TextAlign>
-                  </Style>
-                </Paragraph>
-              </Paragraphs>
-              <Top>0.36122in</Top>
-              <Left>13.08871in</Left>
-              <Height>0.25in</Height>
-              <Width>2.90625in</Width>
-              <ZIndex>3</ZIndex>
-              <Style>
-                <Border>
-                  <Style>None</Style>
-                </Border>
-                <BackgroundColor>Gray</BackgroundColor>
-                <PaddingLeft>2pt</PaddingLeft>
-                <PaddingRight>2pt</PaddingRight>
-                <PaddingTop>2pt</PaddingTop>
-                <PaddingBottom>2pt</PaddingBottom>
-              </Style>
-            </Textbox>
-            <Textbox Name="Textbox11">
-              <CanGrow>true</CanGrow>
-              <KeepTogether>true</KeepTogether>
-              <Paragraphs>
-                <Paragraph>
-                  <TextRuns>
-                    <TextRun>
-                      <Value>SQL Agent Jobs</Value>
-                      <Style>
-                        <FontSize>12pt</FontSize>
+                        <FontSize>8pt</FontSize>
                         <FontWeight>Bold</FontWeight>
                       </Style>
                     </TextRun>
@@ -2455,17 +2352,16 @@ mid(cstr(Fields!last_run_date.Value),5,2)+"-"
                   </Style>
                 </Paragraph>
               </Paragraphs>
-              <rd:DefaultName>Textbox11</rd:DefaultName>
-              <Top>0.95251cm</Top>
-              <Left>2.21369cm</Left>
-              <Height>0.6cm</Height>
-              <Width>13.97cm</Width>
-              <ZIndex>4</ZIndex>
+              <Top>0.32372in</Top>
+              <Left>13.08871in</Left>
+              <Height>0.15846in</Height>
+              <Width>2.90625in</Width>
+              <ZIndex>1</ZIndex>
               <Style>
                 <Border>
                   <Style>None</Style>
                 </Border>
-                <BackgroundColor>LightSkyBlue</BackgroundColor>
+                <BackgroundColor>WhiteSmoke</BackgroundColor>
                 <PaddingLeft>2pt</PaddingLeft>
                 <PaddingRight>2pt</PaddingRight>
                 <PaddingTop>2pt</PaddingTop>
@@ -2507,11 +2403,11 @@ mid(cstr(Fields!last_run_date.Value),5,2)+"-"
                   </Action>
                 </Actions>
               </ActionInfo>
-              <Top>1.0287cm</Top>
+              <Top>0.7112cm</Top>
               <Left>18.37853cm</Left>
               <Height>0.6cm</Height>
               <Width>4.29917cm</Width>
-              <ZIndex>5</ZIndex>
+              <ZIndex>2</ZIndex>
               <Style>
                 <Border>
                   <Style>None</Style>
@@ -2543,9 +2439,9 @@ mid(cstr(Fields!last_run_date.Value),5,2)+"-"
               </ActionInfo>
               <Top>0.04974cm</Top>
               <Left>0.0762cm</Left>
-              <Height>1.5cm</Height>
-              <Width>1.5cm</Width>
-              <ZIndex>6</ZIndex>
+              <Height>1.12355cm</Height>
+              <Width>1.10313cm</Width>
+              <ZIndex>3</ZIndex>
               <ToolTip>Back</ToolTip>
               <Style>
                 <Border>
@@ -2553,6 +2449,40 @@ mid(cstr(Fields!last_run_date.Value),5,2)+"-"
                 </Border>
               </Style>
             </Image>
+            <Textbox Name="Textbox10">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>="["+Parameters!SQLServer.Value+"] :  SQL Agent Jobs"</Value>
+                      <Style>
+                        <FontFamily>Segoe UI</FontFamily>
+                        <FontSize>20pt</FontSize>
+                        <FontWeight>Normal</FontWeight>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style />
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>Textbox10</rd:DefaultName>
+              <Top>0.04974cm</Top>
+              <Left>1.54621cm</Left>
+              <Height>1.12355cm</Height>
+              <Width>12.94658cm</Width>
+              <ZIndex>4</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
           </ReportItems>
           <Style>
             <Border>

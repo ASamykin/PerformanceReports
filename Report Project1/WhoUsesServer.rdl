@@ -7,7 +7,8 @@
       <Transaction>true</Transaction>
       <ConnectionProperties>
         <DataProvider>SQL</DataProvider>
-        <ConnectString>="Data Source="+Parameters!SQLServer.Value+";Application Name=Report:"+Globals!ReportName</ConnectString>
+        <ConnectString>="Data Source="+Parameters!SQLServer.Value
++";Application Name=Report:"+Globals!ReportName</ConnectString>
         <IntegratedSecurity>true</IntegratedSecurity>
       </ConnectionProperties>
       <rd:SecurityType>Integrated</rd:SecurityType>
@@ -20,6 +21,14 @@
         <DataSourceName>DataSource1</DataSourceName>
         <CommandText>/*Note:
 this query populates temporary table #WhoUsesInfo which is being used by the rest datasets*/
+
+if object_id('tempdb..##WhoUsesInfo') is not null    /* reuse previously collected data to speed-up the report*/
+	begin
+		exec ('if (select top 1 datediff(mi,collected,getdate()) from ##WhoUsesInfo)&gt;5 drop table ##WhoUsesInfo')
+		if object_id('tempdb..##WhoUsesInfo') is not null 
+			return
+	end 
+
 
 declare @all_files varchar(200)
 
@@ -43,9 +52,10 @@ FROM sys.traces st CROSS Apply
 	::fn_trace_gettable(@all_files, st.max_files) AS ft 
 INNER JOIN sys.trace_events AS te ON ft.EventClass = te.trace_event_id 
 WHERE 
-ft.LoginName is not null
-and st.is_default=1 
+--ft.LoginName is not null and 
+st.is_default=1 
 and st.status=1
+
 group by 
 ft.LoginName
 		,ft.Hostname
@@ -64,34 +74,18 @@ select
 	,count(1) [Count]
 from sysprocesses 
 where spid&gt;50
+
 group by 
 	loginame
 	,hostname
 	,program_name
 	,db_name(dbid)
 	,convert(date,login_time)
-/*not compatible with 2008R2:  "database_id" is missinfg in the dmv
-select 
-	login_name [LoginName]
-	,host_name [Hostname]
-	,program_name [ApplicationName]
-	,db_name(database_id) [DatabaseName]
-	,convert(date,login_time) [DT]
-	,'Connection' [EventType]
-	,count(1) [Count]
-from sys.dm_exec_sessions 
-where session_id&gt;50
-group by 
-login_name
-	,host_name
-	,program_name
-	,db_name(database_id)
-	,convert(date,login_time)
-*/
 )
 select 
 	distinct 
-		 LoginName
+getdate() [collected]
+		,LoginName
 		,Hostname
 		,ApplicationName
 		,DatabaseName
@@ -105,7 +99,9 @@ select
 			and t2.DatabaseName=t1.DatabaseName
 			and t2.[Date]=t1.[Date]
 			for xml path('')),1,2,'') [Events]
-into #WhoUsesInfo
+, case 
+			when ApplicationName like 'SQLAgent - TSQL JobStep%' then replace(replace(replace(ApplicationName,'SQLAgent - TSQL JobStep (Job ',''),'Step ',''),')','') else '' end [Job]
+into ##WhoUsesInfo
 from data t1
 option (recompile)</CommandText>
       </Query>
@@ -117,7 +113,7 @@ option (recompile)</CommandText>
 	min(Date) [Begin]
 	,max(Date) [End]
 	,datediff(dd,min(Date),max(Date)) [Days] 
-from #WhoUsesInfo</CommandText>
+from ##WhoUsesInfo</CommandText>
       </Query>
       <Fields>
         <Field Name="Begin">
@@ -137,7 +133,35 @@ from #WhoUsesInfo</CommandText>
     <DataSet Name="dsHosts">
       <Query>
         <DataSourceName>DataSource1</DataSourceName>
-        <CommandText>select distinct Hostname  from #WhoUsesInfo</CommandText>
+        <QueryParameters>
+          <QueryParameter Name="@dt">
+            <Value>=iif(isNothing(Parameters!pDate.Value)=false,format(Parameters!pDate.Value,"yyyyMMdd"),Parameters!pDate.Value)</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+          <QueryParameter Name="@app">
+            <Value>=Parameters!pApplication.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+          <QueryParameter Name="@usr">
+            <Value>=Parameters!pUser.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+          <QueryParameter Name="@db">
+            <Value>=Parameters!pDatabase.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>declare @cmd varchar(1000)
+set @cmd = 'select distinct Hostname  from ##WhoUsesInfo where 1=1 '
+
+     +case when @dt is not null then ' and [Date] ='''+@dt+''''  else '' end
+ 
+     +case when @app&lt;&gt;'%'  then ' and [ApplicationName] ='''+@app+''''  else '' end
+     +case when @usr&lt;&gt;'%'   then ' and [LoginName] ='''+@usr+''''  else '' end
+     +case when @db&lt;&gt;'%'    then ' and [DatabaseName] ='''+@db+''''  else '' end
+     + ' option (recompile)'
+
+exec (@cmd)</CommandText>
       </Query>
       <Fields>
         <Field Name="HostName">
@@ -149,9 +173,43 @@ from #WhoUsesInfo</CommandText>
     <DataSet Name="dsApplications">
       <Query>
         <DataSourceName>DataSource1</DataSourceName>
-        <CommandText>select distinct 
+        <QueryParameters>
+          <QueryParameter Name="@dt">
+            <Value>=iif(isNothing(Parameters!pDate.Value)=false
+      ,format(Parameters!pDate.Value,"yyyyMMdd")
+	  ,Parameters!pDate.Value)</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+          <QueryParameter Name="@usr">
+            <Value>=Parameters!pUser.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+          <QueryParameter Name="@hst">
+            <Value>=Parameters!pHost.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+          <QueryParameter Name="@db">
+            <Value>=Parameters!pDatabase.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>/*
+select distinct 
 isnull(ApplicationName,'[n/a]') [ApplicationName]
-from #WhoUsesInfo </CommandText>
+from #WhoUsesInfo 
+*/
+
+declare @cmd varchar(1000)
+set @cmd = 'select distinct  isnull(ApplicationName,''[n/a]'') [ApplicationName] from  ##WhoUsesInfo where 1=1 '
+
+     +case when @dt is not null then ' and [Date] ='''+@dt+''''  else '' end
+
+     +case when @usr&lt;&gt;'%'  then ' and [LoginName] ='''+@usr+''''  else '' end
+     +case when @hst&lt;&gt;'%'   then ' and [Hostname] ='''+@hst+''''  else '' end
+     +case when @db&lt;&gt;'%'    then ' and [DatabaseName] ='''+@db+''''  else '' end
+     + ' option (recompile)'
+
+exec (@cmd)</CommandText>
       </Query>
       <Fields>
         <Field Name="ApplicationName">
@@ -163,9 +221,44 @@ from #WhoUsesInfo </CommandText>
     <DataSet Name="dsLogins">
       <Query>
         <DataSourceName>DataSource1</DataSourceName>
-        <CommandText>select distinct 
+        <QueryParameters>
+          <QueryParameter Name="@dt">
+            <Value>=iif(isNothing(Parameters!pDate.Value)=false
+      ,format(Parameters!pDate.Value,"yyyyMMdd")
+	  ,Parameters!pDate.Value)</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+          <QueryParameter Name="@app">
+            <Value>=Parameters!pApplication.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+          <QueryParameter Name="@db">
+            <Value>=Parameters!pDatabase.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+          <QueryParameter Name="@hst">
+            <Value>=Parameters!pHost.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>/*
+select distinct 
 LoginName 
-from #WhoUsesInfo</CommandText>
+from #WhoUsesInfo
+*/
+
+
+declare @cmd varchar(1000)
+set @cmd = 'select distinct  LoginName from  ##WhoUsesInfo where 1=1 '
+
+     +case when @dt is not null then ' and [Date] ='''+@dt+'''' else '' end
+
+     +case when @app&lt;&gt;'%'  then ' and [ApplicationName] ='''+@app+''''  else '' end
+     +case when @hst&lt;&gt;'%'   then ' and [Hostname] ='''+@hst+''''  else '' end
+     +case when @db&lt;&gt;'%'    then ' and [DatabaseName] ='''+@db+''''  else '' end
+     + ' option (recompile)'
+
+exec (@cmd)</CommandText>
       </Query>
       <Fields>
         <Field Name="LoginName">
@@ -177,9 +270,43 @@ from #WhoUsesInfo</CommandText>
     <DataSet Name="dsDatabases">
       <Query>
         <DataSourceName>DataSource1</DataSourceName>
-        <CommandText>select distinct 
+        <QueryParameters>
+          <QueryParameter Name="@dt">
+            <Value>=iif(isNothing(Parameters!pDate.Value)=false
+      ,format(Parameters!pDate.Value,"yyyyMMdd")
+	  ,Parameters!pDate.Value)</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+          <QueryParameter Name="@app">
+            <Value>=Parameters!pApplication.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+          <QueryParameter Name="@hst">
+            <Value>=Parameters!pHost.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+          <QueryParameter Name="@usr">
+            <Value>=Parameters!pUser.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>/*
+select distinct 
           isnull(DatabaseName,'[n/a]') [DatabaseName] 
-from #WhoUsesInfo </CommandText>
+from #WhoUsesInfo 
+*/
+
+declare @cmd varchar(1000)
+set @cmd = 'select distinct  isnull(DatabaseName,''[n/a]'') [DatabaseName]  from  ##WhoUsesInfo where 1=1 '
+
+     +case when @dt is not null then ' and [Date] ='''+@dt+'''' else '' end
+
+     +case when @app&lt;&gt;'%'  then ' and [ApplicationName] ='''+@app+''''  else '' end
+     +case when @hst&lt;&gt;'%'    then ' and [Hostname] ='''+@hst+''''  else '' end
+     +case when @usr &lt;&gt;'%'    then ' and [LoginName] ='''+@usr+''''  else '' end
+     + ' option (recompile)'
+
+exec (@cmd)</CommandText>
       </Query>
       <Fields>
         <Field Name="DatabaseName">
@@ -208,6 +335,10 @@ from #WhoUsesInfo </CommandText>
             <Value>=Parameters!pDatabase.Value</Value>
             <rd:UserDefined>true</rd:UserDefined>
           </QueryParameter>
+          <QueryParameter Name="@dt">
+            <Value>=Parameters!pDate.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
         </QueryParameters>
         <CommandText>select 
 	LoginName
@@ -216,12 +347,15 @@ from #WhoUsesInfo </CommandText>
 	,DatabaseName
 	,[Date]
 	,[Events]
-from #WhoUsesInfo
+from ##WhoUsesInfo
+
 where 
 	LoginName like '%'+@l+'%'
 	and HostName like '%'+@h+'%'
 	and ApplicationName like '%'+@a+'%'
 	and DatabaseName like '%'+@d+'%'
+	and [Date] = isnull(@dt,[Date])
+
 order by [Date] desc
 option (recompile)</CommandText>
       </Query>
@@ -248,6 +382,73 @@ option (recompile)</CommandText>
         </Field>
         <Field Name="Events">
           <DataField>Events</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="dsEventsPerDay">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <CommandText>with dates as 
+	(
+	select 
+		min(Date) [min]
+		,max(Date) [max]
+		,datediff(dd,min(Date),max(Date)) [days]
+	from ##WhoUsesInfo
+	)
+,all_dates as 
+	(
+		select convert(smallint,0) [n], [min] [dt], [days] 
+		from dates 
+		union all
+		select  convert(smallint,n+1),dateadd(dd,1,[dt]),[days]
+		from all_dates 
+		where [days]&gt;=n+1
+		
+	)
+--select * from all_dates 
+select 
+	isnull(w.Date,ad.dt) [dt]
+	,isnull(count(*),0) [events]
+ from ##WhoUsesInfo w
+ right join all_dates ad on w.[Date]=ad.dt
+where ad.dt&lt;=convert(date,getdate())
+group by isnull(w.Date,ad.dt)
+OPTION (MAXRECURSION 1000, recompile)</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="dt">
+          <DataField>dt</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="events">
+          <DataField>events</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="dsJobs">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <CommandText>select 
+	--j.job_id
+	--,j.name 
+	--,js.step_id
+	--,js.step_name
+	--,js.subsystem,
+	convert(varchar(200),j.job_id)+' : '+convert(varchar(10),js.step_id) [f1]
+	,'SQL Job "'+j.name+'", Step '+convert(varchar(10),js.step_id)+' "'+js.step_name+'" '+quotename(js.subsystem) [f2]
+from msdb..sysjobs j
+join msdb..sysjobsteps js on j.job_id=js.job_id</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="f1">
+          <DataField>f1</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="f2">
+          <DataField>f2</DataField>
           <rd:UserDefined>true</rd:UserDefined>
         </Field>
       </Fields>
@@ -357,6 +558,9 @@ option (recompile)</CommandText>
                                     </Parameter>
                                     <Parameter Name="pDatabase">
                                       <Value>=Parameters!pDatabase.Value</Value>
+                                    </Parameter>
+                                    <Parameter Name="pDate">
+                                      <Value>=Parameters!pDate.Value</Value>
                                     </Parameter>
                                   </Parameters>
                                 </Drillthrough>
@@ -471,6 +675,9 @@ option (recompile)</CommandText>
                                     <Parameter Name="pDatabase">
                                       <Value>=Parameters!pDatabase.Value</Value>
                                     </Parameter>
+                                    <Parameter Name="pDate">
+                                      <Value>=Parameters!pDate.Value</Value>
+                                    </Parameter>
                                   </Parameters>
                                 </Drillthrough>
                               </Action>
@@ -522,8 +729,8 @@ option (recompile)</CommandText>
                 <Value>=Fields!HostName.Value</Value>
               </SortExpression>
             </SortExpressions>
-            <Top>1.33419cm</Top>
-            <Left>0.93802cm</Left>
+            <Top>4.63594cm</Top>
+            <Left>0.80166cm</Left>
             <Height>1.12062cm</Height>
             <Width>6.81271cm</Width>
             <Style>
@@ -556,9 +763,9 @@ option (recompile)</CommandText>
             </Paragraphs>
             <rd:DefaultName>Textbox12</rd:DefaultName>
             <Top>0.14111cm</Top>
-            <Left>0.93802cm</Left>
+            <Left>0.80166cm</Left>
             <Height>0.6cm</Height>
-            <Width>35.49479cm</Width>
+            <Width>38.17465cm</Width>
             <ZIndex>1</ZIndex>
             <Style>
               <Border>
@@ -672,6 +879,9 @@ option (recompile)</CommandText>
                                     <Parameter Name="pDatabase">
                                       <Value>=Parameters!pDatabase.Value</Value>
                                     </Parameter>
+                                    <Parameter Name="pDate">
+                                      <Value>=Parameters!pDate.Value</Value>
+                                    </Parameter>
                                   </Parameters>
                                 </Drillthrough>
                               </Action>
@@ -784,6 +994,9 @@ option (recompile)</CommandText>
                                     <Parameter Name="pDatabase">
                                       <Value>=Parameters!pDatabase.Value</Value>
                                     </Parameter>
+                                    <Parameter Name="pDate">
+                                      <Value>=Parameters!pDate.Value</Value>
+                                    </Parameter>
                                   </Parameters>
                                 </Drillthrough>
                               </Action>
@@ -807,6 +1020,7 @@ option (recompile)</CommandText>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
                         </Textbox>
+                        <rd:Selected>true</rd:Selected>
                       </CellContents>
                     </TablixCell>
                   </TablixCells>
@@ -835,8 +1049,8 @@ option (recompile)</CommandText>
                 <Value>=Fields!ApplicationName.Value</Value>
               </SortExpression>
             </SortExpressions>
-            <Top>1.33419cm</Top>
-            <Left>9.23078cm</Left>
+            <Top>4.63593cm</Top>
+            <Left>10.31357cm</Left>
             <Height>1.12062cm</Height>
             <Width>7.75166cm</Width>
             <ZIndex>2</ZIndex>
@@ -942,10 +1156,13 @@ option (recompile)</CommandText>
                                       <Value>=Parameters!pApplication.Value</Value>
                                     </Parameter>
                                     <Parameter Name="pUser">
-                                      <Value>=Fields!LoginName.Value</Value>
+                                      <Value>%</Value>
                                     </Parameter>
                                     <Parameter Name="pDatabase">
                                       <Value>=Parameters!pDatabase.Value</Value>
+                                    </Parameter>
+                                    <Parameter Name="pDate">
+                                      <Value>=Parameters!pDate.Value</Value>
                                     </Parameter>
                                   </Parameters>
                                 </Drillthrough>
@@ -1059,6 +1276,9 @@ option (recompile)</CommandText>
                                     <Parameter Name="pDatabase">
                                       <Value>=Parameters!pDatabase.Value</Value>
                                     </Parameter>
+                                    <Parameter Name="pDate">
+                                      <Value>=Parameters!pDate.Value</Value>
+                                    </Parameter>
                                   </Parameters>
                                 </Drillthrough>
                               </Action>
@@ -1110,8 +1330,8 @@ option (recompile)</CommandText>
                 <Value>=Fields!LoginName.Value</Value>
               </SortExpression>
             </SortExpressions>
-            <Top>1.33419cm</Top>
-            <Left>18.78573cm</Left>
+            <Top>4.63593cm</Top>
+            <Left>20.76443cm</Left>
             <Height>1.12062cm</Height>
             <Width>7.75166cm</Width>
             <ZIndex>3</ZIndex>
@@ -1220,7 +1440,10 @@ option (recompile)</CommandText>
                                       <Value>=Parameters!pUser.Value</Value>
                                     </Parameter>
                                     <Parameter Name="pDatabase">
-                                      <Value>=Fields!DatabaseName.Value</Value>
+                                      <Value>%</Value>
+                                    </Parameter>
+                                    <Parameter Name="pDate">
+                                      <Value>=Parameters!pDate.Value</Value>
                                     </Parameter>
                                   </Parameters>
                                 </Drillthrough>
@@ -1334,6 +1557,9 @@ option (recompile)</CommandText>
                                     <Parameter Name="pDatabase">
                                       <Value>=Fields!DatabaseName.Value</Value>
                                     </Parameter>
+                                    <Parameter Name="pDate">
+                                      <Value>=Parameters!pDate.Value</Value>
+                                    </Parameter>
                                   </Parameters>
                                 </Drillthrough>
                               </Action>
@@ -1385,8 +1611,8 @@ option (recompile)</CommandText>
                 <Value>=Fields!DatabaseName.Value</Value>
               </SortExpression>
             </SortExpressions>
-            <Top>1.3342cm</Top>
-            <Left>28.68115cm</Left>
+            <Top>4.63594cm</Top>
+            <Left>31.21529cm</Left>
             <Height>1.12062cm</Height>
             <Width>7.75166cm</Width>
             <ZIndex>4</ZIndex>
@@ -2021,8 +2247,8 @@ option (recompile)</CommandText>
               </TablixMembers>
             </TablixRowHierarchy>
             <DataSetName>dsDetails</DataSetName>
-            <Top>6.35854cm</Top>
-            <Left>0.80166cm</Left>
+            <Top>6.90305cm</Top>
+            <Left>0.7923cm</Left>
             <Height>1.12062cm</Height>
             <Width>38.17465cm</Width>
             <ZIndex>5</ZIndex>
@@ -2039,7 +2265,8 @@ option (recompile)</CommandText>
               <Paragraph>
                 <TextRuns>
                   <TextRun>
-                    <Value>="Records: "+cstr(CountRows("dsDetails"))</Value>
+                    <Value>="Records: "+cstr(CountRows("dsDetails")) 
+  +iif(isNothing(Parameters!pDate.Value)=true,"",".     Date: "+format(Parameters!pDate.Value,"dddd, dd MMM yyyy"))</Value>
                     <Style>
                       <FontWeight>Bold</FontWeight>
                     </Style>
@@ -2049,11 +2276,463 @@ option (recompile)</CommandText>
               </Paragraph>
             </Paragraphs>
             <rd:DefaultName>Textbox55</rd:DefaultName>
-            <Top>5.61743cm</Top>
-            <Left>0.80166cm</Left>
+            <Top>6.16194cm</Top>
+            <Left>0.7923cm</Left>
             <Height>0.6cm</Height>
-            <Width>6.38938cm</Width>
+            <Width>11.97803cm</Width>
             <ZIndex>6</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Chart Name="Chart1">
+            <ChartCategoryHierarchy>
+              <ChartMembers>
+                <ChartMember>
+                  <Group Name="Chart1_CategoryGroup">
+                    <GroupExpressions>
+                      <GroupExpression>=Fields!dt.Value</GroupExpression>
+                    </GroupExpressions>
+                  </Group>
+                  <SortExpressions>
+                    <SortExpression>
+                      <Value>=Fields!dt.Value</Value>
+                    </SortExpression>
+                  </SortExpressions>
+                  <Label>=Fields!dt.Value</Label>
+                </ChartMember>
+              </ChartMembers>
+            </ChartCategoryHierarchy>
+            <ChartSeriesHierarchy>
+              <ChartMembers>
+                <ChartMember>
+                  <Label>events</Label>
+                </ChartMember>
+              </ChartMembers>
+            </ChartSeriesHierarchy>
+            <ChartData>
+              <ChartSeriesCollection>
+                <ChartSeries Name="events">
+                  <ChartDataPoints>
+                    <ChartDataPoint>
+                      <ChartDataPointValues>
+                        <Y>=Sum(Fields!events.Value)</Y>
+                      </ChartDataPointValues>
+                      <ChartDataLabel>
+                        <Style />
+                        <UseValueAsLabel>true</UseValueAsLabel>
+                        <Visible>true</Visible>
+                      </ChartDataLabel>
+                      <ToolTip>=format(Fields!dt.Value,"dd MMM, dddd")</ToolTip>
+                      <ActionInfo>
+                        <Actions>
+                          <Action>
+                            <Drillthrough>
+                              <ReportName>WhoUsesServer</ReportName>
+                              <Parameters>
+                                <Parameter Name="SQLServer">
+                                  <Value>=Parameters!SQLServer.Value</Value>
+                                </Parameter>
+                                <Parameter Name="pHost">
+                                  <Value>=Parameters!pHost.Value</Value>
+                                </Parameter>
+                                <Parameter Name="pApplication">
+                                  <Value>=Parameters!pApplication.Value</Value>
+                                </Parameter>
+                                <Parameter Name="pUser">
+                                  <Value>=Parameters!pUser.Value</Value>
+                                </Parameter>
+                                <Parameter Name="pDatabase">
+                                  <Value>=Parameters!pDatabase.Value</Value>
+                                </Parameter>
+                                <Parameter Name="pDate">
+                                  <Value>=Fields!dt.Value</Value>
+                                </Parameter>
+                              </Parameters>
+                            </Drillthrough>
+                          </Action>
+                        </Actions>
+                      </ActionInfo>
+                      <Style>
+                        <Border>
+                          <Color>=iif(Fields!dt.Value=Parameters!pDate.Value,"Brown","LimeGreen")</Color>
+                        </Border>
+                        <Color>=iif(Fields!dt.Value=Parameters!pDate.Value
+	,"Khaki"
+	,iif(((weekday(fields!dt.value)+5) Mod 7)&gt;=5
+		,"Silver"
+		,"#dcfadc"
+		)
+	)</Color>
+                      </Style>
+                      <ChartMarker>
+                        <Style />
+                      </ChartMarker>
+                      <DataElementOutput>Output</DataElementOutput>
+                    </ChartDataPoint>
+                  </ChartDataPoints>
+                  <Style />
+                  <ChartEmptyPoints>
+                    <Style />
+                    <ChartMarker>
+                      <Style />
+                    </ChartMarker>
+                    <ChartDataLabel>
+                      <Style />
+                    </ChartDataLabel>
+                  </ChartEmptyPoints>
+                  <ValueAxisName>Primary</ValueAxisName>
+                  <CategoryAxisName>Primary</CategoryAxisName>
+                  <ChartSmartLabel>
+                    <CalloutLineColor>Black</CalloutLineColor>
+                    <MinMovingDistance>0pt</MinMovingDistance>
+                  </ChartSmartLabel>
+                </ChartSeries>
+              </ChartSeriesCollection>
+            </ChartData>
+            <ChartAreas>
+              <ChartArea Name="Default">
+                <ChartCategoryAxes>
+                  <ChartAxis Name="Primary">
+                    <Style>
+                      <Border>
+                        <Color>Gainsboro</Color>
+                        <Style>None</Style>
+                      </Border>
+                      <FontSize>8pt</FontSize>
+                      <Format>dd MMM</Format>
+                      <Color>#5c5c5c</Color>
+                    </Style>
+                    <ChartAxisTitle>
+                      <Caption />
+                      <Style>
+                        <FontSize>9pt</FontSize>
+                        <Color>#5c5c5c</Color>
+                      </Style>
+                    </ChartAxisTitle>
+                    <Interval>1</Interval>
+                    <IntervalType>Days</IntervalType>
+                    <ChartMajorGridLines>
+                      <Enabled>False</Enabled>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                        </Border>
+                      </Style>
+                    </ChartMajorGridLines>
+                    <ChartMinorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                          <Style>Dotted</Style>
+                        </Border>
+                      </Style>
+                    </ChartMinorGridLines>
+                    <ChartMajorTickMarks>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                          <Style>None</Style>
+                        </Border>
+                      </Style>
+                    </ChartMajorTickMarks>
+                    <ChartMinorTickMarks>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                        </Border>
+                      </Style>
+                      <Length>0.5</Length>
+                    </ChartMinorTickMarks>
+                    <CrossAt>NaN</CrossAt>
+                    <Minimum>NaN</Minimum>
+                    <Maximum>NaN</Maximum>
+                    <IncludeZero>false</IncludeZero>
+                    <ChartAxisScaleBreak>
+                      <Style />
+                    </ChartAxisScaleBreak>
+                  </ChartAxis>
+                  <ChartAxis Name="Secondary">
+                    <Style>
+                      <Border>
+                        <Color>Gainsboro</Color>
+                        <Style>None</Style>
+                      </Border>
+                      <FontSize>8pt</FontSize>
+                      <Color>#5c5c5c</Color>
+                    </Style>
+                    <ChartAxisTitle>
+                      <Caption />
+                      <Style>
+                        <FontSize>9pt</FontSize>
+                        <Color>#5c5c5c</Color>
+                      </Style>
+                    </ChartAxisTitle>
+                    <ChartMajorGridLines>
+                      <Enabled>False</Enabled>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                        </Border>
+                      </Style>
+                    </ChartMajorGridLines>
+                    <ChartMinorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                          <Style>Dotted</Style>
+                        </Border>
+                      </Style>
+                    </ChartMinorGridLines>
+                    <ChartMajorTickMarks>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                          <Style>None</Style>
+                        </Border>
+                      </Style>
+                    </ChartMajorTickMarks>
+                    <ChartMinorTickMarks>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                        </Border>
+                      </Style>
+                      <Length>0.5</Length>
+                    </ChartMinorTickMarks>
+                    <CrossAt>NaN</CrossAt>
+                    <Location>Opposite</Location>
+                    <Minimum>NaN</Minimum>
+                    <Maximum>NaN</Maximum>
+                    <ChartAxisScaleBreak>
+                      <Style />
+                    </ChartAxisScaleBreak>
+                  </ChartAxis>
+                </ChartCategoryAxes>
+                <ChartValueAxes>
+                  <ChartAxis Name="Primary">
+                    <Visible>False</Visible>
+                    <Style>
+                      <Border>
+                        <Color>Gainsboro</Color>
+                        <Style>None</Style>
+                      </Border>
+                      <FontSize>8pt</FontSize>
+                      <Color>#5c5c5c</Color>
+                    </Style>
+                    <ChartAxisTitle>
+                      <Caption />
+                      <Style>
+                        <FontSize>9pt</FontSize>
+                        <Color>#5c5c5c</Color>
+                      </Style>
+                    </ChartAxisTitle>
+                    <ChartMajorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                        </Border>
+                      </Style>
+                    </ChartMajorGridLines>
+                    <ChartMinorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                          <Style>Dotted</Style>
+                        </Border>
+                      </Style>
+                    </ChartMinorGridLines>
+                    <ChartMajorTickMarks>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                          <Style>None</Style>
+                        </Border>
+                      </Style>
+                    </ChartMajorTickMarks>
+                    <ChartMinorTickMarks>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                        </Border>
+                      </Style>
+                      <Length>0.5</Length>
+                    </ChartMinorTickMarks>
+                    <CrossAt>NaN</CrossAt>
+                    <Minimum>NaN</Minimum>
+                    <Maximum>NaN</Maximum>
+                    <ChartAxisScaleBreak>
+                      <Style />
+                    </ChartAxisScaleBreak>
+                  </ChartAxis>
+                  <ChartAxis Name="Secondary">
+                    <Style>
+                      <Border>
+                        <Color>Gainsboro</Color>
+                        <Style>None</Style>
+                      </Border>
+                      <FontSize>8pt</FontSize>
+                      <Color>#5c5c5c</Color>
+                    </Style>
+                    <ChartAxisTitle>
+                      <Caption />
+                      <Style>
+                        <FontSize>9pt</FontSize>
+                        <Color>#5c5c5c</Color>
+                      </Style>
+                    </ChartAxisTitle>
+                    <ChartMajorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                        </Border>
+                      </Style>
+                    </ChartMajorGridLines>
+                    <ChartMinorGridLines>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                          <Style>Dotted</Style>
+                        </Border>
+                      </Style>
+                    </ChartMinorGridLines>
+                    <ChartMajorTickMarks>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                          <Style>None</Style>
+                        </Border>
+                      </Style>
+                    </ChartMajorTickMarks>
+                    <ChartMinorTickMarks>
+                      <Style>
+                        <Border>
+                          <Color>Gainsboro</Color>
+                        </Border>
+                      </Style>
+                      <Length>0.5</Length>
+                    </ChartMinorTickMarks>
+                    <CrossAt>NaN</CrossAt>
+                    <Location>Opposite</Location>
+                    <Minimum>NaN</Minimum>
+                    <Maximum>NaN</Maximum>
+                    <ChartAxisScaleBreak>
+                      <Style />
+                    </ChartAxisScaleBreak>
+                  </ChartAxis>
+                </ChartValueAxes>
+                <Style>
+                  <BackgroundColor>#00ffffff</BackgroundColor>
+                  <BackgroundGradientType>None</BackgroundGradientType>
+                </Style>
+              </ChartArea>
+            </ChartAreas>
+            <ChartTitles>
+              <ChartTitle Name="Title1">
+                <Caption>Events/Day</Caption>
+                <Style>
+                  <BackgroundGradientType>None</BackgroundGradientType>
+                  <FontWeight>Bold</FontWeight>
+                  <TextDecoration>Underline</TextDecoration>
+                  <TextAlign>General</TextAlign>
+                  <VerticalAlign>Top</VerticalAlign>
+                  <Color>Blue</Color>
+                </Style>
+                <Position>LeftCenter</Position>
+                <ActionInfo>
+                  <Actions>
+                    <Action>
+                      <Drillthrough>
+                        <ReportName>WhoUsesServer</ReportName>
+                        <Parameters>
+                          <Parameter Name="SQLServer">
+                            <Value>=Parameters!SQLServer.Value</Value>
+                          </Parameter>
+                          <Parameter Name="pHost">
+                            <Value>=Parameters!pHost.Value</Value>
+                          </Parameter>
+                          <Parameter Name="pApplication">
+                            <Value>=Parameters!pApplication.Value</Value>
+                          </Parameter>
+                          <Parameter Name="pUser">
+                            <Value>=Parameters!pUser.Value</Value>
+                          </Parameter>
+                          <Parameter Name="pDatabase">
+                            <Value>=Parameters!pDatabase.Value</Value>
+                          </Parameter>
+                        </Parameters>
+                      </Drillthrough>
+                    </Action>
+                  </Actions>
+                </ActionInfo>
+              </ChartTitle>
+            </ChartTitles>
+            <Palette>Pacific</Palette>
+            <ChartBorderSkin>
+              <Style>
+                <BackgroundColor>Gray</BackgroundColor>
+                <BackgroundGradientType>None</BackgroundGradientType>
+                <Color>White</Color>
+              </Style>
+            </ChartBorderSkin>
+            <ChartNoDataMessage Name="NoDataMessage">
+              <Caption>No Data Available</Caption>
+              <Style>
+                <BackgroundGradientType>None</BackgroundGradientType>
+                <FontWeight>Bold</FontWeight>
+                <TextAlign>General</TextAlign>
+                <VerticalAlign>Top</VerticalAlign>
+              </Style>
+            </ChartNoDataMessage>
+            <DataSetName>dsEventsPerDay</DataSetName>
+            <Top>1.04282cm</Top>
+            <Left>0.80166cm</Left>
+            <Height>2.94452cm</Height>
+            <Width>38.17465cm</Width>
+            <ZIndex>7</ZIndex>
+            <Style>
+              <Border>
+                <Color>LightGrey</Color>
+                <Style>Solid</Style>
+              </Border>
+              <BackgroundColor>White</BackgroundColor>
+              <BackgroundGradientType>None</BackgroundGradientType>
+            </Style>
+          </Chart>
+          <Textbox Name="Textbox4">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>="Hosts, Applications, Users and Databases detected on "+format(Parameters!pDate.Value,"dddd, dd MMM yyyy")+""</Value>
+                    <Style>
+                      <FontWeight>Bold</FontWeight>
+                      <Color>Red</Color>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style>
+                  <TextAlign>Center</TextAlign>
+                </Style>
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox4</rd:DefaultName>
+            <Top>4.05667cm</Top>
+            <Left>0.79057cm</Left>
+            <Height>0.44125cm</Height>
+            <Width>38.1029cm</Width>
+            <ZIndex>8</ZIndex>
+            <Visibility>
+              <Hidden>=iif(isNothing(Parameters!pDate.Value)=true,true,false)</Hidden>
+            </Visibility>
             <Style>
               <Border>
                 <Style>None</Style>
@@ -2068,82 +2747,13 @@ option (recompile)</CommandText>
         <Height>21.08729cm</Height>
         <Style />
       </Body>
-      <Width>46.32854cm</Width>
+      <Width>41.98937cm</Width>
       <Page>
         <PageHeader>
-          <Height>1.67888cm</Height>
+          <Height>1.60224cm</Height>
           <PrintOnFirstPage>true</PrintOnFirstPage>
           <PrintOnLastPage>true</PrintOnLastPage>
           <ReportItems>
-            <Textbox Name="Textbox29">
-              <CanGrow>true</CanGrow>
-              <KeepTogether>true</KeepTogether>
-              <Paragraphs>
-                <Paragraph>
-                  <TextRuns>
-                    <TextRun>
-                      <Value>SQL Server :</Value>
-                      <Style>
-                        <FontSize>12pt</FontSize>
-                        <FontWeight>Bold</FontWeight>
-                      </Style>
-                    </TextRun>
-                  </TextRuns>
-                  <Style>
-                    <TextAlign>Right</TextAlign>
-                  </Style>
-                </Paragraph>
-              </Paragraphs>
-              <rd:DefaultName>Textbox29</rd:DefaultName>
-              <Top>0.02556in</Top>
-              <Left>0.84153in</Left>
-              <Height>0.25in</Height>
-              <Width>1.34028in</Width>
-              <Style>
-                <Border>
-                  <Style>None</Style>
-                </Border>
-                <BackgroundColor>LightSkyBlue</BackgroundColor>
-                <PaddingLeft>2pt</PaddingLeft>
-                <PaddingRight>2pt</PaddingRight>
-                <PaddingTop>2pt</PaddingTop>
-                <PaddingBottom>2pt</PaddingBottom>
-              </Style>
-            </Textbox>
-            <Textbox Name="SQLServer">
-              <CanGrow>true</CanGrow>
-              <KeepTogether>true</KeepTogether>
-              <Paragraphs>
-                <Paragraph>
-                  <TextRuns>
-                    <TextRun>
-                      <Value>=Parameters!SQLServer.Value</Value>
-                      <Style>
-                        <FontSize>12pt</FontSize>
-                        <FontWeight>Bold</FontWeight>
-                      </Style>
-                    </TextRun>
-                  </TextRuns>
-                  <Style />
-                </Paragraph>
-              </Paragraphs>
-              <rd:DefaultName>SQLServer</rd:DefaultName>
-              <Top>0.02556in</Top>
-              <Left>2.29986in</Left>
-              <Height>0.25in</Height>
-              <Width>4.04167in</Width>
-              <ZIndex>1</ZIndex>
-              <Style>
-                <Border>
-                  <Style>None</Style>
-                </Border>
-                <BackgroundColor>LightSkyBlue</BackgroundColor>
-                <PaddingLeft>2pt</PaddingLeft>
-                <PaddingRight>2pt</PaddingRight>
-                <PaddingTop>2pt</PaddingTop>
-                <PaddingBottom>2pt</PaddingBottom>
-              </Style>
-            </Textbox>
             <Textbox Name="txtReportCreated">
               <CanGrow>true</CanGrow>
               <KeepTogether>true</KeepTogether>
@@ -2168,11 +2778,10 @@ option (recompile)</CommandText>
                   </Style>
                 </Paragraph>
               </Paragraphs>
-              <Top>0.05334in</Top>
-              <Left>15.18944in</Left>
+              <Top>0.07526in</Top>
+              <Left>14.15819in</Left>
               <Height>0.25in</Height>
-              <Width>2.90625in</Width>
-              <ZIndex>2</ZIndex>
+              <Width>2.28125in</Width>
               <Style>
                 <Border>
                   <Style>None</Style>
@@ -2203,52 +2812,16 @@ option (recompile)</CommandText>
                   </Style>
                 </Paragraph>
               </Paragraphs>
-              <Top>0.31722in</Top>
-              <Left>15.18944in</Left>
+              <Top>0.33914in</Top>
+              <Left>14.15819in</Left>
               <Height>0.25in</Height>
-              <Width>2.90625in</Width>
-              <ZIndex>3</ZIndex>
+              <Width>2.28125in</Width>
+              <ZIndex>1</ZIndex>
               <Style>
                 <Border>
                   <Style>None</Style>
                 </Border>
                 <BackgroundColor>Gray</BackgroundColor>
-                <PaddingLeft>2pt</PaddingLeft>
-                <PaddingRight>2pt</PaddingRight>
-                <PaddingTop>2pt</PaddingTop>
-                <PaddingBottom>2pt</PaddingBottom>
-              </Style>
-            </Textbox>
-            <Textbox Name="Textbox26">
-              <CanGrow>true</CanGrow>
-              <KeepTogether>true</KeepTogether>
-              <Paragraphs>
-                <Paragraph>
-                  <TextRuns>
-                    <TextRun>
-                      <Value>Who uses my server?</Value>
-                      <Style>
-                        <FontSize>12pt</FontSize>
-                        <FontWeight>Bold</FontWeight>
-                      </Style>
-                    </TextRun>
-                  </TextRuns>
-                  <Style>
-                    <TextAlign>Center</TextAlign>
-                  </Style>
-                </Paragraph>
-              </Paragraphs>
-              <rd:DefaultName>Textbox26</rd:DefaultName>
-              <Top>0.86926cm</Top>
-              <Left>2.10219cm</Left>
-              <Height>0.6cm</Height>
-              <Width>14.0053cm</Width>
-              <ZIndex>4</ZIndex>
-              <Style>
-                <Border>
-                  <Style>None</Style>
-                </Border>
-                <BackgroundColor>LightSkyBlue</BackgroundColor>
                 <PaddingLeft>2pt</PaddingLeft>
                 <PaddingRight>2pt</PaddingRight>
                 <PaddingTop>2pt</PaddingTop>
@@ -2277,7 +2850,7 @@ option (recompile)</CommandText>
               <Left>0cm</Left>
               <Height>1.5cm</Height>
               <Width>1.5cm</Width>
-              <ZIndex>5</ZIndex>
+              <ZIndex>2</ZIndex>
               <ToolTip>Back</ToolTip>
               <Style>
                 <Border>
@@ -2285,6 +2858,170 @@ option (recompile)</CommandText>
                 </Border>
               </Style>
             </Image>
+            <Textbox Name="Textbox1">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>Filters:</Value>
+                      <Style />
+                    </TextRun>
+                  </TextRuns>
+                  <Style>
+                    <TextAlign>Center</TextAlign>
+                  </Style>
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>Textbox1</rd:DefaultName>
+              <Top>0.22615cm</Top>
+              <Left>19.64006cm</Left>
+              <Height>0.6cm</Height>
+              <Width>1.57396cm</Width>
+              <ZIndex>3</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>=iif(Parameters!pHost.Value
+		+Parameters!pApplication.Value
+		+Parameters!pUser.Value
+		+Parameters!pDatabase.Value
+		+iif(isNothing(Parameters!pDate.Value)=true,"%","date")
+		&lt;&gt;"%%%%%"
+		,"Khaki"
+		,"LightGrey")</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Textbox Name="Textbox3">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>=iif(Parameters!pHost.Value="%","","Host: "+Parameters!pHost.Value+chr(10))
++iif(Parameters!pApplication.Value="%","","Application: "+Parameters!pApplication.Value+chr(10))
++iif(Parameters!pDatabase.Value="%","","Database: "+Parameters!pDatabase.Value+chr(10))
++iif(Parameters!pUser.Value="%","","Username: "+Parameters!pUser.Value+chr(10))
++iif(isNothing(Parameters!pDate.Value)=true,"","Date: "+format(Parameters!pDate.Value,"dd MMM"))</Value>
+                      <Style />
+                    </TextRun>
+                  </TextRuns>
+                  <Style />
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>Textbox3</rd:DefaultName>
+              <Top>0.22615cm</Top>
+              <Left>21.55034cm</Left>
+              <Height>0.6cm</Height>
+              <Width>13.13625cm</Width>
+              <ZIndex>4</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <BackgroundColor>=iif(Parameters!pHost.Value
+		+Parameters!pApplication.Value
+		+Parameters!pUser.Value
+		+Parameters!pDatabase.Value
+		+iif(isNothing(Parameters!pDate.Value)=true,"%","date")
+		&lt;&gt;"%%%%%"
+		,"Khaki"
+		,"LightGrey")</BackgroundColor>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Textbox Name="Textbox2">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>Reset</Value>
+                      <Style>
+                        <TextDecoration>Underline</TextDecoration>
+                        <Color>Blue</Color>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style>
+                    <TextAlign>Center</TextAlign>
+                  </Style>
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>Textbox1</rd:DefaultName>
+              <ActionInfo>
+                <Actions>
+                  <Action>
+                    <Drillthrough>
+                      <ReportName>WhoUsesServer</ReportName>
+                      <Parameters>
+                        <Parameter Name="SQLServer">
+                          <Value>=Parameters!SQLServer.Value</Value>
+                        </Parameter>
+                      </Parameters>
+                    </Drillthrough>
+                  </Action>
+                </Actions>
+              </ActionInfo>
+              <Top>0.22615cm</Top>
+              <Left>17.88971cm</Left>
+              <Height>0.6cm</Height>
+              <Width>1.57396cm</Width>
+              <ZIndex>5</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
+            <Textbox Name="Textbox10">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs>
+                <Paragraph>
+                  <TextRuns>
+                    <TextRun>
+                      <Value>=Parameters!SQLServer.Value+" :  Who uses the server?"</Value>
+                      <Style>
+                        <FontSize>20pt</FontSize>
+                        <FontWeight>Bold</FontWeight>
+                      </Style>
+                    </TextRun>
+                  </TextRuns>
+                  <Style />
+                </Paragraph>
+              </Paragraphs>
+              <rd:DefaultName>Textbox10</rd:DefaultName>
+              <Top>0.17048cm</Top>
+              <Left>1.75771cm</Left>
+              <Height>0.9263cm</Height>
+              <Width>15.25291cm</Width>
+              <ZIndex>6</ZIndex>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+                <PaddingLeft>2pt</PaddingLeft>
+                <PaddingRight>2pt</PaddingRight>
+                <PaddingTop>2pt</PaddingTop>
+                <PaddingBottom>2pt</PaddingBottom>
+              </Style>
+            </Textbox>
           </ReportItems>
           <Style>
             <Border>
@@ -2309,7 +3046,7 @@ option (recompile)</CommandText>
       <DataType>String</DataType>
       <DefaultValue>
         <Values>
-          <Value>nl000sql12</Value>
+          <Value>nl000sql09</Value>
         </Values>
       </DefaultValue>
       <Prompt>SQLServer</Prompt>
@@ -2355,6 +3092,12 @@ option (recompile)</CommandText>
       <Prompt>Database</Prompt>
       <Hidden>true</Hidden>
     </ReportParameter>
+    <ReportParameter Name="pDate">
+      <DataType>DateTime</DataType>
+      <Nullable>true</Nullable>
+      <Prompt>Choose Date</Prompt>
+      <Hidden>true</Hidden>
+    </ReportParameter>
   </ReportParameters>
   <ReportParametersLayout>
     <GridLayoutDefinition>
@@ -2385,6 +3128,11 @@ option (recompile)</CommandText>
           <ColumnIndex>0</ColumnIndex>
           <RowIndex>1</RowIndex>
           <ParameterName>pDatabase</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>1</ColumnIndex>
+          <RowIndex>1</RowIndex>
+          <ParameterName>pDate</ParameterName>
         </CellDefinition>
       </CellDefinitions>
     </GridLayoutDefinition>

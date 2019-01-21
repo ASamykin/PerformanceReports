@@ -5,11 +5,23 @@
     <DataSource Name="DataSource1">
       <ConnectionProperties>
         <DataProvider>SQL</DataProvider>
-        <ConnectString>="Data Source="+Parameters!SQLServer.Value</ConnectString>
+        <ConnectString>="Data Source=" + Parameters!SQLServer.Value
++";Application Name=Report:DBInformation"</ConnectString>
         <IntegratedSecurity>true</IntegratedSecurity>
       </ConnectionProperties>
       <rd:SecurityType>Integrated</rd:SecurityType>
       <rd:DataSourceID>735e123b-f75a-4d4e-b936-1053795c1ac9</rd:DataSourceID>
+    </DataSource>
+    <DataSource Name="db">
+      <ConnectionProperties>
+        <DataProvider>SQL</DataProvider>
+        <ConnectString>="Data Source="  + Parameters!SQLServer.Value
++";Initial Catalog=" + Parameters!DBName.Value 
++";Application Name=Report:DBInformation_Objects"</ConnectString>
+        <IntegratedSecurity>true</IntegratedSecurity>
+      </ConnectionProperties>
+      <rd:SecurityType>Integrated</rd:SecurityType>
+      <rd:DataSourceID>3ae182ef-1705-4e1a-b73c-a1663ed6a5bd</rd:DataSourceID>
     </DataSource>
   </DataSources>
   <DataSets>
@@ -130,16 +142,24 @@
 		, convert(numeric(10,2),sum(bf.file_size/1024/1024)) [DBSizeMB]
 		, (SELECT convert(numeric(20,2),sum(bf2.file_size)/1024/1024) FROM msdb..backupfile bf2 WHERE bf2.backup_set_id=bs.backup_set_id AND bf2.file_type='D') [DataFilesMB]
 		, (SELECT convert(numeric(20,2),sum(bf2.file_size)/1024/1024) FROM msdb..backupfile bf2 WHERE bf2.backup_set_id=bs.backup_set_id AND bf2.file_type='L') [LogFilesMB]
+/*
 		, convert(numeric(20,2),bs.backup_size/1024/1024) [BackupSizeMB]
 		, convert(numeric(20,2),bs.compressed_backup_size/1024/1024) [BackupCompressedMB]
+*/
+
+		, case when bs.type&lt;&gt;'D' then NULL else convert(numeric(20,2),bs.backup_size/1024/1024) end [BackupSizeMB]
+		, case when bs.type&lt;&gt;'D' then NULL else convert(numeric(20,2),bs.compressed_backup_size/1024/1024) end [BackupCompressedMB]
+
+
 FROM  msdb..backupset bs
 JOIN msdb..backupfile bf ON bs.backup_set_id=bf.backup_set_id
 WHERE 
  bs.database_name = @db
- and bs.type='D'
+-- and bs.type='D'
 GROUP BY 
 	bs.backup_start_date, bs.server_name,bs.backup_set_id,
 	bs.database_name, bs.recovery_model, bs.backup_size, bs.compressed_backup_size
+, bs.type
 order by bs.backup_set_id asc</CommandText>
       </Query>
       <Fields>
@@ -889,6 +909,44 @@ exec (@cmd)</CommandText>
         </Field>
       </Fields>
     </DataSet>
+    <DataSet Name="dsObjectsPerFile">
+      <Query>
+        <DataSourceName>db</DataSourceName>
+        <CommandText>
+with data as (
+select 
+	f.file_id,
+	o.type_desc [obj_type], 
+	count(distinct o.name) [n]
+from 
+    sys.allocation_units u 
+    join sys.database_files f on u.data_space_id = f.data_space_id 
+   join sys.partitions p on u.container_id = p.hobt_id
+	join sys.objects o on p.object_id=o.object_id
+where 
+    u.type in (1, 3)
+group by 
+o.type_desc,
+f.file_id
+)
+select
+	file_id,
+	replace(stuff((select ', '+obj_type+quotename(convert(varchar(10),n)) as [data()] from data d2 where d2.file_id=d1.file_id for xml path ('')),1,2,''),' ,',',') [objs]
+from data d1 
+group by file_id 
+option (recompile)</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="file_id">
+          <DataField>file_id</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="objs">
+          <DataField>objs</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+      </Fields>
+    </DataSet>
   </DataSets>
   <ReportSections>
     <ReportSection>
@@ -965,7 +1023,7 @@ exec (@cmd)</CommandText>
                   <Width>0.28125in</Width>
                 </TablixColumn>
                 <TablixColumn>
-                  <Width>0.79166in</Width>
+                  <Width>1.07639in</Width>
                 </TablixColumn>
                 <TablixColumn>
                   <Width>1.8264in</Width>
@@ -998,13 +1056,16 @@ exec (@cmd)</CommandText>
                   <Width>0.54167in</Width>
                 </TablixColumn>
                 <TablixColumn>
-                  <Width>0.52083in</Width>
+                  <Width>0.69444in</Width>
                 </TablixColumn>
                 <TablixColumn>
-                  <Width>0.68402in</Width>
+                  <Width>0.76735in</Width>
                 </TablixColumn>
                 <TablixColumn>
                   <Width>0.69792in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>4.33333in</Width>
                 </TablixColumn>
               </TablixColumns>
               <TablixRows>
@@ -1488,26 +1549,16 @@ exec (@cmd)</CommandText>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>is read</Value>
+                                  <Value>ReadOnly</Value>
                                   <Style>
                                     <FontSize>8pt</FontSize>
                                     <FontWeight>Bold</FontWeight>
                                   </Style>
                                 </TextRun>
                               </TextRuns>
-                              <Style />
-                            </Paragraph>
-                            <Paragraph>
-                              <TextRuns>
-                                <TextRun>
-                                  <Value>only</Value>
-                                  <Style>
-                                    <FontSize>8pt</FontSize>
-                                    <FontWeight>Bold</FontWeight>
-                                  </Style>
-                                </TextRun>
-                              </TextRuns>
-                              <Style />
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
                             </Paragraph>
                           </Paragraphs>
                           <rd:DefaultName>Textbox36</rd:DefaultName>
@@ -1534,26 +1585,30 @@ exec (@cmd)</CommandText>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>is media</Value>
+                                  <Value>Media</Value>
                                   <Style>
                                     <FontSize>8pt</FontSize>
                                     <FontWeight>Bold</FontWeight>
                                   </Style>
                                 </TextRun>
                               </TextRuns>
-                              <Style />
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
                             </Paragraph>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>read only</Value>
+                                  <Value>ReadOnly</Value>
                                   <Style>
                                     <FontSize>8pt</FontSize>
                                     <FontWeight>Bold</FontWeight>
                                   </Style>
                                 </TextRun>
                               </TextRuns>
-                              <Style />
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
                             </Paragraph>
                           </Paragraphs>
                           <rd:DefaultName>Textbox38</rd:DefaultName>
@@ -1580,17 +1635,55 @@ exec (@cmd)</CommandText>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>is sparse</Value>
+                                  <Value>Sparse</Value>
                                   <Style>
                                     <FontSize>8pt</FontSize>
                                     <FontWeight>Bold</FontWeight>
                                   </Style>
                                 </TextRun>
                               </TextRuns>
-                              <Style />
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
                             </Paragraph>
                           </Paragraphs>
                           <rd:DefaultName>Textbox41</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox47">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>DB Objects</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Left</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox47</rd:DefaultName>
                           <Style>
                             <Border>
                               <Color>LightGrey</Color>
@@ -2286,7 +2379,9 @@ exec (@cmd)</CommandText>
                                   </Style>
                                 </TextRun>
                               </TextRuns>
-                              <Style />
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
                             </Paragraph>
                           </Paragraphs>
                           <rd:DefaultName>is_read_only</rd:DefaultName>
@@ -2318,7 +2413,9 @@ exec (@cmd)</CommandText>
                                   </Style>
                                 </TextRun>
                               </TextRuns>
-                              <Style />
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
                             </Paragraph>
                           </Paragraphs>
                           <rd:DefaultName>is_media_read_only</rd:DefaultName>
@@ -2350,10 +2447,74 @@ exec (@cmd)</CommandText>
                                   </Style>
                                 </TextRun>
                               </TextRuns>
-                              <Style />
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
                             </Paragraph>
                           </Paragraphs>
                           <rd:DefaultName>is_sparse</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox51">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=lookup(Fields!FileID.Value
+		,Fields!file_id.Value
+		,Fields!objs.Value
+		,"dsObjectsPerFile")</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <TextDecoration>Underline</TextDecoration>
+                                    <Color>Blue</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Left</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox51</rd:DefaultName>
+                          <ActionInfo>
+                            <Actions>
+                              <Action>
+                                <Drillthrough>
+                                  <ReportName>DBInformation_Objects</ReportName>
+                                  <Parameters>
+                                    <Parameter Name="SQLServer">
+                                      <Value>=Parameters!SQLServer.Value</Value>
+                                    </Parameter>
+                                    <Parameter Name="DBName">
+                                      <Value>=Fields!DB.Value</Value>
+                                    </Parameter>
+                                    <Parameter Name="FileID">
+                                      <Value>=Fields!FileID.Value</Value>
+                                    </Parameter>
+                                  </Parameters>
+                                </Drillthrough>
+                              </Action>
+                            </Actions>
+                          </ActionInfo>
+                          <Visibility>
+                            <Hidden>=iif(Fields!Type.Value="LOG",true,false)</Hidden>
+                          </Visibility>
                           <Style>
                             <Border>
                               <Color>LightGrey</Color>
@@ -2388,6 +2549,7 @@ exec (@cmd)</CommandText>
                 <TablixMember />
                 <TablixMember />
                 <TablixMember />
+                <TablixMember />
               </TablixMembers>
             </TablixColumnHierarchy>
             <TablixRowHierarchy>
@@ -2404,7 +2566,7 @@ exec (@cmd)</CommandText>
             <Top>1.32223in</Top>
             <Left>0.16542in</Left>
             <Height>0.40625in</Height>
-            <Width>15.38888in</Width>
+            <Width>20.26388in</Width>
             <ZIndex>2</ZIndex>
             <Visibility>
               <ToggleItem>txtDBSpaceUsage</ToggleItem>
@@ -10177,7 +10339,7 @@ format(max(Fields!BackupDate.Value),"dd MMM yyyy")+")"</Caption>
       <DataType>String</DataType>
       <DefaultValue>
         <Values>
-          <Value>EURV131502\DBA_UAT_01</Value>
+          <Value>nl000sql07</Value>
         </Values>
       </DefaultValue>
       <Prompt>SQLServer</Prompt>
@@ -10187,7 +10349,7 @@ format(max(Fields!BackupDate.Value),"dd MMM yyyy")+")"</Caption>
       <DataType>String</DataType>
       <DefaultValue>
         <Values>
-          <Value>master</Value>
+          <Value>eep</Value>
         </Values>
       </DefaultValue>
       <Prompt>DBName</Prompt>

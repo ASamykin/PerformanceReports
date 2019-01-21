@@ -6,113 +6,107 @@
     <DataSource Name="DataSource1">
       <ConnectionProperties>
         <DataProvider>SQL</DataProvider>
-        <ConnectString>="Data Source="+Parameters!SQLServer.Value</ConnectString>
+        <ConnectString>="Data Source="+"nl000sql08"+";Application Name=Report:"+Globals!ReportName</ConnectString>
         <IntegratedSecurity>true</IntegratedSecurity>
       </ConnectionProperties>
       <rd:SecurityType>Integrated</rd:SecurityType>
-      <rd:DataSourceID>8de8f2f7-697f-4044-a5e0-cab93189d93d</rd:DataSourceID>
+      <rd:DataSourceID>91a6ab87-6d48-416d-b9c4-86a11b699427</rd:DataSourceID>
     </DataSource>
   </DataSources>
   <DataSets>
-    <DataSet Name="dsBackups">
+    <DataSet Name="dsDiskLatencyPerFile">
       <Query>
         <DataSourceName>DataSource1</DataSourceName>
-        <CommandText>;with info as (
-select 
-d.name
-,d.create_date [Created]
-,DATABASEPROPERTYEX(d.name,'recovery') [RecoveryModel]
-,case 
-	when bs.type='D' then 'FULL' 
-	when bs.type='I' then 'DIFF' 
-	when bs.type='L' then 'LOG'
-	when bs.type='F' then 'File or filegroup' 
-	when bs.type='G' then 'Differential file'
-	when bs.type='P' then 'Partial'
-	when bs.type='Q' then 'Differential partial' 
-	else bs.type end [BackupType]
-,max(bs.backup_start_date) [LastBackup]
-,max(rh.restore_date) [LastRestore]
-from 
-	sys.databases d
-left join msdb.dbo.backupset bs on bs.database_name=d.name
-left join msdb..restorehistory rh on bs.database_name=rh.destination_database_name 
-where d.database_id&lt;&gt;2
-group by d.name,bs.type,d.create_date
-)
-select 
-	[name]
-	,DATABASEPROPERTYEX(name,'Status') [status]
-	,RecoveryModel
-	,Created
-	,LastRestore
-	,[FULL],[DIFF],[LOG],[File or filegroup],[Differential file],[Partial],[Differential partial],[Unknown]
-	,case 
-		when ([LOG] is null and RecoveryModel='FULL') then 'Absent Log' 
-		when ([LOG]&lt;dateadd(dd,-1,convert(date,getdate())) and RecoveryModel='FULL') then 'Old Log'
-		when ([FULL] is null) then 'Absent Full'
-		when ([FULL] &lt;dateadd(dd,-7,convert(date,getdate()))) then 'Old Full'
-		else Null
-	end [Note]
-from info 
-pivot (max(LastBackup) for BackupType in ([FULL],[DIFF],[LOG],[File or filegroup],[Differential file],[Partial],[Differential partial],[Unknown])) as t
-option (recompile,maxdop 1)</CommandText>
+        <CommandText>declare @drive_info table (
+	volume_mount_point nvarchar(512)
+	)
+
+if convert(varchar(20),SERVERPROPERTY('ProductVersion')) not like '10.0.%' 
+	begin
+		declare @cmd varchar(2048)
+		select @cmd=
+					'with files(database_id,file_id) as
+						(select 
+							min(database_id)
+							,min(file_id)
+						from sys.master_files with (NOLOCK)
+						group by 
+						left(physical_name,len(physical_name)-charindex(''\'',reverse(physical_name)))
+						)
+					select distinct
+						vs.volume_mount_point
+					from [files] f with (NOLOCK)
+					cross apply sys.dm_os_volume_stats(f.database_id, f.[file_id]) vs 
+					option (recompile)'
+		insert into @drive_info([volume_mount_point])
+		exec (@cmd)
+	end 
+else 
+	begin
+		insert into @drive_info ([volume_mount_point])
+		select left(physical_name,3)
+		from sys.master_files 
+		group by left(physical_name,3)
+	end 
+
+select
+    vs.volume_mount_point [Drive]
+    ,db_name(vfs.database_id) [db]
+	,vfs.file_id 
+    ,case when num_of_reads = 0 then 0 else (io_stall_read_ms / num_of_reads) end [LatencyRead]
+    ,case when num_of_writes = 0 then 0 else (io_stall_write_ms / num_of_writes) end [LatencyWrite]
+    ,case when (num_of_reads + num_of_writes) = 0 then 0 else (io_stall / (num_of_reads + num_of_writes)) end [LatencyTtl]
+    ,case when num_of_reads = 0  then 0 else (num_of_bytes_read / num_of_reads)/1024 end  [AVG KBs/Read]
+    ,case when num_of_writes = 0  then 0 else (num_of_bytes_written / num_of_writes)/1024 end [AVG KBs/Write]
+    ,case when (num_of_reads+num_of_writes) = 0 then 0 else ((num_of_bytes_read + num_of_bytes_written) /(num_of_reads + num_of_writes))/1024 end [AVG KBs/Transfer]
+    ,mf.physical_name
+from
+    sys.dm_io_virtual_file_stats (null,null) as vfs
+	join sys.master_files as mf  on vfs.database_id = mf.database_id and vfs.file_id = mf.file_id
+    join @drive_info vs on mf.physical_name like vs.volume_mount_point+'%'
+
+order by 1, 2, 3 
+option (recompile)</CommandText>
       </Query>
       <Fields>
-        <Field Name="name">
-          <DataField>name</DataField>
+        <Field Name="Drive">
+          <DataField>Drive</DataField>
           <rd:TypeName>System.String</rd:TypeName>
         </Field>
-        <Field Name="status">
-          <DataField>status</DataField>
-          <rd:TypeName>System.Object</rd:TypeName>
+        <Field Name="db">
+          <DataField>db</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
         </Field>
-        <Field Name="RecoveryModel">
-          <DataField>RecoveryModel</DataField>
-          <rd:TypeName>System.Object</rd:TypeName>
+        <Field Name="file_id">
+          <DataField>file_id</DataField>
+          <rd:TypeName>System.Int16</rd:TypeName>
         </Field>
-        <Field Name="Created">
-          <DataField>Created</DataField>
-          <rd:TypeName>System.DateTime</rd:TypeName>
+        <Field Name="LatencyRead">
+          <DataField>LatencyRead</DataField>
+          <rd:TypeName>System.Int64</rd:TypeName>
         </Field>
-        <Field Name="LastRestore">
-          <DataField>LastRestore</DataField>
-          <rd:TypeName>System.DateTime</rd:TypeName>
+        <Field Name="LatencyWrite">
+          <DataField>LatencyWrite</DataField>
+          <rd:TypeName>System.Int64</rd:TypeName>
         </Field>
-        <Field Name="FULL">
-          <DataField>FULL</DataField>
-          <rd:TypeName>System.DateTime</rd:TypeName>
+        <Field Name="LatencyTtl">
+          <DataField>LatencyTtl</DataField>
+          <rd:TypeName>System.Int64</rd:TypeName>
         </Field>
-        <Field Name="DIFF">
-          <DataField>DIFF</DataField>
-          <rd:TypeName>System.DateTime</rd:TypeName>
+        <Field Name="AVG_KBs_Read">
+          <DataField>AVG KBs/Read</DataField>
+          <rd:TypeName>System.Int64</rd:TypeName>
         </Field>
-        <Field Name="LOG">
-          <DataField>LOG</DataField>
-          <rd:TypeName>System.DateTime</rd:TypeName>
+        <Field Name="AVG_KBs_Write">
+          <DataField>AVG KBs/Write</DataField>
+          <rd:TypeName>System.Int64</rd:TypeName>
         </Field>
-        <Field Name="File_or_filegroup">
-          <DataField>File or filegroup</DataField>
-          <rd:TypeName>System.DateTime</rd:TypeName>
+        <Field Name="AVG_KBs_Transfer">
+          <DataField>AVG KBs/Transfer</DataField>
+          <rd:TypeName>System.Int64</rd:TypeName>
         </Field>
-        <Field Name="Differential_file">
-          <DataField>Differential file</DataField>
-          <rd:TypeName>System.DateTime</rd:TypeName>
-        </Field>
-        <Field Name="Partial">
-          <DataField>Partial</DataField>
-          <rd:TypeName>System.DateTime</rd:TypeName>
-        </Field>
-        <Field Name="Differential_partial">
-          <DataField>Differential partial</DataField>
-          <rd:TypeName>System.DateTime</rd:TypeName>
-        </Field>
-        <Field Name="Unknown">
-          <DataField>Unknown</DataField>
-          <rd:TypeName>System.DateTime</rd:TypeName>
-        </Field>
-        <Field Name="Note">
-          <DataField>Note</DataField>
+        <Field Name="physical_name">
+          <DataField>physical_name</DataField>
           <rd:TypeName>System.String</rd:TypeName>
         </Field>
       </Fields>
@@ -122,35 +116,20 @@ option (recompile,maxdop 1)</CommandText>
     <ReportSection>
       <Body>
         <ReportItems>
-          <Tablix Name="Tablix1">
+          <Tablix Name="Tablix2">
             <TablixBody>
               <TablixColumns>
                 <TablixColumn>
-                  <Width>0.92413cm</Width>
-                </TablixColumn>
-                <TablixColumn>
-                  <Width>5.78083cm</Width>
+                  <Width>1.11945cm</Width>
                 </TablixColumn>
                 <TablixColumn>
                   <Width>2.5cm</Width>
                 </TablixColumn>
                 <TablixColumn>
-                  <Width>2.5cm</Width>
+                  <Width>7.31542cm</Width>
                 </TablixColumn>
                 <TablixColumn>
-                  <Width>2.97625cm</Width>
-                </TablixColumn>
-                <TablixColumn>
-                  <Width>2.8175cm</Width>
-                </TablixColumn>
-                <TablixColumn>
-                  <Width>2.87042cm</Width>
-                </TablixColumn>
-                <TablixColumn>
-                  <Width>2.68521cm</Width>
-                </TablixColumn>
-                <TablixColumn>
-                  <Width>2.73813cm</Width>
+                  <Width>1.57396cm</Width>
                 </TablixColumn>
                 <TablixColumn>
                   <Width>2.5cm</Width>
@@ -168,7 +147,10 @@ option (recompile,maxdop 1)</CommandText>
                   <Width>2.5cm</Width>
                 </TablixColumn>
                 <TablixColumn>
-                  <Width>2.1825cm</Width>
+                  <Width>2.5cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>13.92299cm</Width>
                 </TablixColumn>
               </TablixColumns>
               <TablixRows>
@@ -177,7 +159,7 @@ option (recompile,maxdop 1)</CommandText>
                   <TablixCells>
                     <TablixCell>
                       <CellContents>
-                        <Textbox Name="Textbox33">
+                        <Textbox Name="Textbox32">
                           <CanGrow>true</CanGrow>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
@@ -186,6 +168,7 @@ option (recompile,maxdop 1)</CommandText>
                                 <TextRun>
                                   <Value>N</Value>
                                   <Style>
+                                    <FontSize>9pt</FontSize>
                                     <FontWeight>Bold</FontWeight>
                                   </Style>
                                 </TextRun>
@@ -195,198 +178,14 @@ option (recompile,maxdop 1)</CommandText>
                               </Style>
                             </Paragraph>
                           </Paragraphs>
-                          <rd:DefaultName>Textbox33</rd:DefaultName>
+                          <rd:DefaultName>Textbox32</rd:DefaultName>
                           <Style>
                             <Border>
                               <Color>LightGrey</Color>
-                              <Style>Solid</Style>
+                              <Style>None</Style>
                             </Border>
                             <BackgroundColor>WhiteSmoke</BackgroundColor>
-                            <PaddingLeft>2pt</PaddingLeft>
-                            <PaddingRight>2pt</PaddingRight>
-                            <PaddingTop>2pt</PaddingTop>
-                            <PaddingBottom>2pt</PaddingBottom>
-                          </Style>
-                        </Textbox>
-                      </CellContents>
-                    </TablixCell>
-                    <TablixCell>
-                      <CellContents>
-                        <Textbox Name="Textbox1">
-                          <CanGrow>true</CanGrow>
-                          <UserSort>
-                            <SortExpression>=Fields!name.Value</SortExpression>
-                          </UserSort>
-                          <KeepTogether>true</KeepTogether>
-                          <Paragraphs>
-                            <Paragraph>
-                              <TextRuns>
-                                <TextRun>
-                                  <Value>Database</Value>
-                                  <Style>
-                                    <FontWeight>Bold</FontWeight>
-                                  </Style>
-                                </TextRun>
-                              </TextRuns>
-                              <Style />
-                            </Paragraph>
-                          </Paragraphs>
-                          <rd:DefaultName>Textbox1</rd:DefaultName>
-                          <Style>
-                            <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
-                            </Border>
-                            <BackgroundColor>WhiteSmoke</BackgroundColor>
-                            <PaddingLeft>2pt</PaddingLeft>
-                            <PaddingRight>2pt</PaddingRight>
-                            <PaddingTop>2pt</PaddingTop>
-                            <PaddingBottom>2pt</PaddingBottom>
-                          </Style>
-                        </Textbox>
-                      </CellContents>
-                    </TablixCell>
-                    <TablixCell>
-                      <CellContents>
-                        <Textbox Name="Textbox7">
-                          <CanGrow>true</CanGrow>
-                          <UserSort>
-                            <SortExpression>=Fields!RecoveryModel.Value</SortExpression>
-                          </UserSort>
-                          <KeepTogether>true</KeepTogether>
-                          <Paragraphs>
-                            <Paragraph>
-                              <TextRuns>
-                                <TextRun>
-                                  <Value>Recovery Model</Value>
-                                  <Style>
-                                    <FontWeight>Bold</FontWeight>
-                                  </Style>
-                                </TextRun>
-                              </TextRuns>
-                              <Style>
-                                <TextAlign>Center</TextAlign>
-                              </Style>
-                            </Paragraph>
-                          </Paragraphs>
-                          <rd:DefaultName>Textbox7</rd:DefaultName>
-                          <Style>
-                            <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
-                            </Border>
-                            <BackgroundColor>WhiteSmoke</BackgroundColor>
-                            <PaddingLeft>2pt</PaddingLeft>
-                            <PaddingRight>2pt</PaddingRight>
-                            <PaddingTop>2pt</PaddingTop>
-                            <PaddingBottom>2pt</PaddingBottom>
-                          </Style>
-                        </Textbox>
-                      </CellContents>
-                    </TablixCell>
-                    <TablixCell>
-                      <CellContents>
-                        <Textbox Name="Textbox3">
-                          <CanGrow>true</CanGrow>
-                          <UserSort>
-                            <SortExpression>=Fields!status.Value</SortExpression>
-                          </UserSort>
-                          <KeepTogether>true</KeepTogether>
-                          <Paragraphs>
-                            <Paragraph>
-                              <TextRuns>
-                                <TextRun>
-                                  <Value>Status</Value>
-                                  <Style>
-                                    <FontWeight>Bold</FontWeight>
-                                  </Style>
-                                </TextRun>
-                              </TextRuns>
-                              <Style>
-                                <TextAlign>Center</TextAlign>
-                              </Style>
-                            </Paragraph>
-                          </Paragraphs>
-                          <rd:DefaultName>Textbox3</rd:DefaultName>
-                          <Style>
-                            <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
-                            </Border>
-                            <BackgroundColor>WhiteSmoke</BackgroundColor>
-                            <PaddingLeft>2pt</PaddingLeft>
-                            <PaddingRight>2pt</PaddingRight>
-                            <PaddingTop>2pt</PaddingTop>
-                            <PaddingBottom>2pt</PaddingBottom>
-                          </Style>
-                        </Textbox>
-                      </CellContents>
-                    </TablixCell>
-                    <TablixCell>
-                      <CellContents>
-                        <Textbox Name="Textbox5">
-                          <CanGrow>true</CanGrow>
-                          <KeepTogether>true</KeepTogether>
-                          <Paragraphs>
-                            <Paragraph>
-                              <TextRuns>
-                                <TextRun>
-                                  <Value>Created</Value>
-                                  <Style>
-                                    <FontWeight>Bold</FontWeight>
-                                  </Style>
-                                </TextRun>
-                              </TextRuns>
-                              <Style>
-                                <TextAlign>Center</TextAlign>
-                              </Style>
-                            </Paragraph>
-                          </Paragraphs>
-                          <rd:DefaultName>Textbox5</rd:DefaultName>
-                          <Style>
-                            <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
-                            </Border>
-                            <BackgroundColor>WhiteSmoke</BackgroundColor>
-                            <PaddingLeft>2pt</PaddingLeft>
-                            <PaddingRight>2pt</PaddingRight>
-                            <PaddingTop>2pt</PaddingTop>
-                            <PaddingBottom>2pt</PaddingBottom>
-                          </Style>
-                        </Textbox>
-                      </CellContents>
-                    </TablixCell>
-                    <TablixCell>
-                      <CellContents>
-                        <Textbox Name="Textbox9">
-                          <CanGrow>true</CanGrow>
-                          <UserSort>
-                            <SortExpression>=Fields!LastRestore.Value</SortExpression>
-                          </UserSort>
-                          <KeepTogether>true</KeepTogether>
-                          <Paragraphs>
-                            <Paragraph>
-                              <TextRuns>
-                                <TextRun>
-                                  <Value>Last Restore</Value>
-                                  <Style>
-                                    <FontWeight>Bold</FontWeight>
-                                  </Style>
-                                </TextRun>
-                              </TextRuns>
-                              <Style>
-                                <TextAlign>Center</TextAlign>
-                              </Style>
-                            </Paragraph>
-                          </Paragraphs>
-                          <rd:DefaultName>Textbox9</rd:DefaultName>
-                          <Style>
-                            <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
-                            </Border>
-                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -400,15 +199,16 @@ option (recompile,maxdop 1)</CommandText>
                         <Textbox Name="Textbox11">
                           <CanGrow>true</CanGrow>
                           <UserSort>
-                            <SortExpression>=Fields!FULL.Value</SortExpression>
+                            <SortExpression>=Fields!Drive.Value</SortExpression>
                           </UserSort>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>FULL</Value>
+                                  <Value>Drive</Value>
                                   <Style>
+                                    <FontSize>9pt</FontSize>
                                     <FontWeight>Bold</FontWeight>
                                   </Style>
                                 </TextRun>
@@ -422,9 +222,10 @@ option (recompile,maxdop 1)</CommandText>
                           <Style>
                             <Border>
                               <Color>LightGrey</Color>
-                              <Style>Solid</Style>
+                              <Style>None</Style>
                             </Border>
                             <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -438,15 +239,16 @@ option (recompile,maxdop 1)</CommandText>
                         <Textbox Name="Textbox13">
                           <CanGrow>true</CanGrow>
                           <UserSort>
-                            <SortExpression>=Fields!DIFF.Value</SortExpression>
+                            <SortExpression>=Fields!db.Value</SortExpression>
                           </UserSort>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>DIFF</Value>
+                                  <Value>Database</Value>
                                   <Style>
+                                    <FontSize>9pt</FontSize>
                                     <FontWeight>Bold</FontWeight>
                                   </Style>
                                 </TextRun>
@@ -459,10 +261,10 @@ option (recompile,maxdop 1)</CommandText>
                           <rd:DefaultName>Textbox13</rd:DefaultName>
                           <Style>
                             <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
+                              <Style>None</Style>
                             </Border>
                             <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -476,15 +278,30 @@ option (recompile,maxdop 1)</CommandText>
                         <Textbox Name="Textbox15">
                           <CanGrow>true</CanGrow>
                           <UserSort>
-                            <SortExpression>=Fields!LOG.Value</SortExpression>
+                            <SortExpression>=Fields!file_id.Value</SortExpression>
                           </UserSort>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>LOG</Value>
+                                  <Value>File </Value>
                                   <Style>
+                                    <FontSize>9pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>ID</Value>
+                                  <Style>
+                                    <FontSize>9pt</FontSize>
                                     <FontWeight>Bold</FontWeight>
                                   </Style>
                                 </TextRun>
@@ -497,10 +314,10 @@ option (recompile,maxdop 1)</CommandText>
                           <rd:DefaultName>Textbox15</rd:DefaultName>
                           <Style>
                             <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
+                              <Style>None</Style>
                             </Border>
                             <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -514,15 +331,30 @@ option (recompile,maxdop 1)</CommandText>
                         <Textbox Name="Textbox17">
                           <CanGrow>true</CanGrow>
                           <UserSort>
-                            <SortExpression>=Fields!File_or_filegroup.Value</SortExpression>
+                            <SortExpression>=Fields!LatencyRead.Value</SortExpression>
                           </UserSort>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>File/FG</Value>
+                                  <Value>Latency </Value>
                                   <Style>
+                                    <FontSize>9pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Read (ms)</Value>
+                                  <Style>
+                                    <FontSize>9pt</FontSize>
                                     <FontWeight>Bold</FontWeight>
                                   </Style>
                                 </TextRun>
@@ -535,10 +367,10 @@ option (recompile,maxdop 1)</CommandText>
                           <rd:DefaultName>Textbox17</rd:DefaultName>
                           <Style>
                             <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
+                              <Style>None</Style>
                             </Border>
                             <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -552,15 +384,30 @@ option (recompile,maxdop 1)</CommandText>
                         <Textbox Name="Textbox19">
                           <CanGrow>true</CanGrow>
                           <UserSort>
-                            <SortExpression>=Fields!Differential_file.Value</SortExpression>
+                            <SortExpression>=Fields!LatencyWrite.Value</SortExpression>
                           </UserSort>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>DiffFile</Value>
+                                  <Value>Latency </Value>
                                   <Style>
+                                    <FontSize>9pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Write (ms)</Value>
+                                  <Style>
+                                    <FontSize>9pt</FontSize>
                                     <FontWeight>Bold</FontWeight>
                                   </Style>
                                 </TextRun>
@@ -573,10 +420,10 @@ option (recompile,maxdop 1)</CommandText>
                           <rd:DefaultName>Textbox19</rd:DefaultName>
                           <Style>
                             <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
+                              <Style>None</Style>
                             </Border>
                             <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -590,15 +437,30 @@ option (recompile,maxdop 1)</CommandText>
                         <Textbox Name="Textbox21">
                           <CanGrow>true</CanGrow>
                           <UserSort>
-                            <SortExpression>=Fields!Partial.Value</SortExpression>
+                            <SortExpression>=Fields!LatencyTtl.Value</SortExpression>
                           </UserSort>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>Partial</Value>
+                                  <Value>Latency</Value>
                                   <Style>
+                                    <FontSize>9pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Overall (ms)</Value>
+                                  <Style>
+                                    <FontSize>9pt</FontSize>
                                     <FontWeight>Bold</FontWeight>
                                   </Style>
                                 </TextRun>
@@ -611,10 +473,10 @@ option (recompile,maxdop 1)</CommandText>
                           <rd:DefaultName>Textbox21</rd:DefaultName>
                           <Style>
                             <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
+                              <Style>None</Style>
                             </Border>
                             <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -628,15 +490,30 @@ option (recompile,maxdop 1)</CommandText>
                         <Textbox Name="Textbox23">
                           <CanGrow>true</CanGrow>
                           <UserSort>
-                            <SortExpression>=Fields!Differential_partial.Value</SortExpression>
+                            <SortExpression>=Fields!AVG_KBs_Read.Value</SortExpression>
                           </UserSort>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>DiffPartial</Value>
+                                  <Value>AVG KBs per</Value>
                                   <Style>
+                                    <FontSize>9pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Read</Value>
+                                  <Style>
+                                    <FontSize>9pt</FontSize>
                                     <FontWeight>Bold</FontWeight>
                                   </Style>
                                 </TextRun>
@@ -649,10 +526,10 @@ option (recompile,maxdop 1)</CommandText>
                           <rd:DefaultName>Textbox23</rd:DefaultName>
                           <Style>
                             <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
+                              <Style>None</Style>
                             </Border>
                             <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -666,15 +543,30 @@ option (recompile,maxdop 1)</CommandText>
                         <Textbox Name="Textbox25">
                           <CanGrow>true</CanGrow>
                           <UserSort>
-                            <SortExpression>=Fields!Unknown.Value</SortExpression>
+                            <SortExpression>=Fields!AVG_KBs_Write.Value</SortExpression>
                           </UserSort>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>Unknown</Value>
+                                  <Value>AVG KBs per</Value>
                                   <Style>
+                                    <FontSize>9pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Write</Value>
+                                  <Style>
+                                    <FontSize>9pt</FontSize>
                                     <FontWeight>Bold</FontWeight>
                                   </Style>
                                 </TextRun>
@@ -687,10 +579,10 @@ option (recompile,maxdop 1)</CommandText>
                           <rd:DefaultName>Textbox25</rd:DefaultName>
                           <Style>
                             <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
+                              <Style>None</Style>
                             </Border>
                             <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -701,18 +593,33 @@ option (recompile,maxdop 1)</CommandText>
                     </TablixCell>
                     <TablixCell>
                       <CellContents>
-                        <Textbox Name="Textbox35">
+                        <Textbox Name="Textbox27">
                           <CanGrow>true</CanGrow>
                           <UserSort>
-                            <SortExpression>=Fields!Note.Value</SortExpression>
+                            <SortExpression>=Fields!AVG_KBs_Transfer.Value</SortExpression>
                           </UserSort>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>Note</Value>
+                                  <Value>AVG KBs per</Value>
                                   <Style>
+                                    <FontSize>9pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Transfer</Value>
+                                  <Style>
+                                    <FontSize>9pt</FontSize>
                                     <FontWeight>Bold</FontWeight>
                                   </Style>
                                 </TextRun>
@@ -722,13 +629,52 @@ option (recompile,maxdop 1)</CommandText>
                               </Style>
                             </Paragraph>
                           </Paragraphs>
-                          <rd:DefaultName>Textbox35</rd:DefaultName>
+                          <rd:DefaultName>Textbox27</rd:DefaultName>
                           <Style>
                             <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
+                              <Style>None</Style>
                             </Border>
                             <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox30">
+                          <CanGrow>true</CanGrow>
+                          <UserSort>
+                            <SortExpression>=Fields!physical_name.Value</SortExpression>
+                          </UserSort>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Physical Name</Value>
+                                  <Style>
+                                    <FontSize>9pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox30</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Style>None</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -744,7 +690,7 @@ option (recompile,maxdop 1)</CommandText>
                   <TablixCells>
                     <TablixCell>
                       <CellContents>
-                        <Textbox Name="Textbox34">
+                        <Textbox Name="Textbox33">
                           <CanGrow>true</CanGrow>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
@@ -753,7 +699,6 @@ option (recompile,maxdop 1)</CommandText>
                                 <TextRun>
                                   <Value>=rownumber(Nothing)</Value>
                                   <Style>
-                                    <FontFamily>Arial</FontFamily>
                                     <FontSize>8pt</FontSize>
                                   </Style>
                                 </TextRun>
@@ -763,12 +708,19 @@ option (recompile,maxdop 1)</CommandText>
                               </Style>
                             </Paragraph>
                           </Paragraphs>
-                          <rd:DefaultName>Textbox34</rd:DefaultName>
+                          <rd:DefaultName>Textbox33</rd:DefaultName>
                           <Style>
                             <Border>
                               <Color>LightGrey</Color>
                               <Style>Solid</Style>
                             </Border>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>=iif(cint((RowNumber(Nothing)/2))*2!=RowNumber(Nothing), "WhiteSmoke", "White")</BackgroundColor>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -779,14 +731,55 @@ option (recompile,maxdop 1)</CommandText>
                     </TablixCell>
                     <TablixCell>
                       <CellContents>
-                        <Textbox Name="name">
+                        <Textbox Name="Drive">
                           <CanGrow>true</CanGrow>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>=Fields!name.Value</Value>
+                                  <Value>=Fields!Drive.Value</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Drive</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>=iif(cint((RowNumber(Nothing)/2))*2!=RowNumber(Nothing), "WhiteSmoke", "White")</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="db">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!db.Value</Value>
                                   <Style>
                                     <FontSize>8pt</FontSize>
                                   </Style>
@@ -795,12 +788,19 @@ option (recompile,maxdop 1)</CommandText>
                               <Style />
                             </Paragraph>
                           </Paragraphs>
-                          <rd:DefaultName>name</rd:DefaultName>
+                          <rd:DefaultName>db</rd:DefaultName>
                           <Style>
                             <Border>
                               <Color>LightGrey</Color>
                               <Style>Solid</Style>
                             </Border>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>=iif(cint((RowNumber(Nothing)/2))*2!=RowNumber(Nothing), "WhiteSmoke", "White")</BackgroundColor>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -811,16 +811,15 @@ option (recompile,maxdop 1)</CommandText>
                     </TablixCell>
                     <TablixCell>
                       <CellContents>
-                        <Textbox Name="RecoveryModel">
+                        <Textbox Name="file_id">
                           <CanGrow>true</CanGrow>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>=Fields!RecoveryModel.Value</Value>
+                                  <Value>=Fields!file_id.Value</Value>
                                   <Style>
-                                    <FontFamily>Arial</FontFamily>
                                     <FontSize>8pt</FontSize>
                                   </Style>
                                 </TextRun>
@@ -830,12 +829,19 @@ option (recompile,maxdop 1)</CommandText>
                               </Style>
                             </Paragraph>
                           </Paragraphs>
-                          <rd:DefaultName>RecoveryModel</rd:DefaultName>
+                          <rd:DefaultName>file_id</rd:DefaultName>
                           <Style>
                             <Border>
                               <Color>LightGrey</Color>
                               <Style>Solid</Style>
                             </Border>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>=iif(cint((RowNumber(Nothing)/2))*2!=RowNumber(Nothing), "WhiteSmoke", "White")</BackgroundColor>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -846,14 +852,14 @@ option (recompile,maxdop 1)</CommandText>
                     </TablixCell>
                     <TablixCell>
                       <CellContents>
-                        <Textbox Name="status">
+                        <Textbox Name="LatencyRead">
                           <CanGrow>true</CanGrow>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>=Fields!status.Value</Value>
+                                  <Value>=Fields!LatencyRead.Value</Value>
                                   <Style>
                                     <FontSize>8pt</FontSize>
                                   </Style>
@@ -864,12 +870,19 @@ option (recompile,maxdop 1)</CommandText>
                               </Style>
                             </Paragraph>
                           </Paragraphs>
-                          <rd:DefaultName>status</rd:DefaultName>
+                          <rd:DefaultName>LatencyRead</rd:DefaultName>
                           <Style>
                             <Border>
                               <Color>LightGrey</Color>
                               <Style>Solid</Style>
                             </Border>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>=iif(cint((RowNumber(Nothing)/2))*2!=RowNumber(Nothing), "WhiteSmoke", "White")</BackgroundColor>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -880,17 +893,16 @@ option (recompile,maxdop 1)</CommandText>
                     </TablixCell>
                     <TablixCell>
                       <CellContents>
-                        <Textbox Name="Created">
+                        <Textbox Name="LatencyWrite">
                           <CanGrow>true</CanGrow>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>=Fields!Created.Value</Value>
+                                  <Value>=Fields!LatencyWrite.Value</Value>
                                   <Style>
                                     <FontSize>8pt</FontSize>
-                                    <Format>dd MMM yyyy HH:mm</Format>
                                   </Style>
                                 </TextRun>
                               </TextRuns>
@@ -899,12 +911,19 @@ option (recompile,maxdop 1)</CommandText>
                               </Style>
                             </Paragraph>
                           </Paragraphs>
-                          <rd:DefaultName>Created</rd:DefaultName>
+                          <rd:DefaultName>LatencyWrite</rd:DefaultName>
                           <Style>
                             <Border>
                               <Color>LightGrey</Color>
                               <Style>Solid</Style>
                             </Border>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>=iif(cint((RowNumber(Nothing)/2))*2!=RowNumber(Nothing), "WhiteSmoke", "White")</BackgroundColor>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -915,18 +934,16 @@ option (recompile,maxdop 1)</CommandText>
                     </TablixCell>
                     <TablixCell>
                       <CellContents>
-                        <Textbox Name="LastRestore">
+                        <Textbox Name="LatencyTtl">
                           <CanGrow>true</CanGrow>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>=Fields!LastRestore.Value</Value>
+                                  <Value>=Fields!LatencyTtl.Value</Value>
                                   <Style>
-                                    <FontFamily>Arial</FontFamily>
                                     <FontSize>8pt</FontSize>
-                                    <Format>dd MMM yyyy HH:mm</Format>
                                   </Style>
                                 </TextRun>
                               </TextRuns>
@@ -935,12 +952,19 @@ option (recompile,maxdop 1)</CommandText>
                               </Style>
                             </Paragraph>
                           </Paragraphs>
-                          <rd:DefaultName>LastRestore</rd:DefaultName>
+                          <rd:DefaultName>LatencyTtl</rd:DefaultName>
                           <Style>
                             <Border>
                               <Color>LightGrey</Color>
                               <Style>Solid</Style>
                             </Border>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>=iif(cint((RowNumber(Nothing)/2))*2!=RowNumber(Nothing), "WhiteSmoke", "White")</BackgroundColor>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -951,18 +975,16 @@ option (recompile,maxdop 1)</CommandText>
                     </TablixCell>
                     <TablixCell>
                       <CellContents>
-                        <Textbox Name="FULL">
+                        <Textbox Name="AVG_KBs_Read">
                           <CanGrow>true</CanGrow>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>=Fields!FULL.Value</Value>
+                                  <Value>=Fields!AVG_KBs_Read.Value</Value>
                                   <Style>
-                                    <FontFamily>Arial</FontFamily>
                                     <FontSize>8pt</FontSize>
-                                    <Format>dd MMM yyyy HH:mm</Format>
                                   </Style>
                                 </TextRun>
                               </TextRuns>
@@ -971,26 +993,19 @@ option (recompile,maxdop 1)</CommandText>
                               </Style>
                             </Paragraph>
                           </Paragraphs>
-                          <rd:DefaultName>FULL</rd:DefaultName>
-                          <ToolTip>=iif(isnothing(Fields!FULL.Value)=true
-	,"No FULL backups!"
-	,iif(datediff(dateinterval.Day,Fields!FULL.Value,Today())&gt;7
-		,"FULL backup is older than 7 days!"
-		,Nothing
-		)
-	)</ToolTip>
+                          <rd:DefaultName>AVG_KBs_Read</rd:DefaultName>
                           <Style>
                             <Border>
                               <Color>LightGrey</Color>
                               <Style>Solid</Style>
                             </Border>
-                            <BackgroundColor>=iif(isnothing(Fields!FULL.Value)=true
-	,"Tomato"
-	,iif(datediff(dateinterval.Day,Fields!FULL.Value,Today())&gt;7
-		,"Tomato"
-		,"Transparent"
-		)
-	)</BackgroundColor>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>=iif(cint((RowNumber(Nothing)/2))*2!=RowNumber(Nothing), "WhiteSmoke", "White")</BackgroundColor>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -1001,18 +1016,16 @@ option (recompile,maxdop 1)</CommandText>
                     </TablixCell>
                     <TablixCell>
                       <CellContents>
-                        <Textbox Name="DIFF">
+                        <Textbox Name="AVG_KBs_Write">
                           <CanGrow>true</CanGrow>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>=Fields!DIFF.Value</Value>
+                                  <Value>=Fields!AVG_KBs_Write.Value</Value>
                                   <Style>
-                                    <FontFamily>Arial</FontFamily>
                                     <FontSize>8pt</FontSize>
-                                    <Format>dd MMM yyyy HH:mm</Format>
                                   </Style>
                                 </TextRun>
                               </TextRuns>
@@ -1021,12 +1034,19 @@ option (recompile,maxdop 1)</CommandText>
                               </Style>
                             </Paragraph>
                           </Paragraphs>
-                          <rd:DefaultName>DIFF</rd:DefaultName>
+                          <rd:DefaultName>AVG_KBs_Write</rd:DefaultName>
                           <Style>
                             <Border>
                               <Color>LightGrey</Color>
                               <Style>Solid</Style>
                             </Border>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>=iif(cint((RowNumber(Nothing)/2))*2!=RowNumber(Nothing), "WhiteSmoke", "White")</BackgroundColor>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -1037,18 +1057,16 @@ option (recompile,maxdop 1)</CommandText>
                     </TablixCell>
                     <TablixCell>
                       <CellContents>
-                        <Textbox Name="LOG">
+                        <Textbox Name="AVG_KBs_Transfer">
                           <CanGrow>true</CanGrow>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>=Fields!LOG.Value</Value>
+                                  <Value>=Fields!AVG_KBs_Transfer.Value</Value>
                                   <Style>
-                                    <FontFamily>Arial</FontFamily>
                                     <FontSize>8pt</FontSize>
-                                    <Format>dd MMM yyyy HH:mm</Format>
                                   </Style>
                                 </TextRun>
                               </TextRuns>
@@ -1057,32 +1075,19 @@ option (recompile,maxdop 1)</CommandText>
                               </Style>
                             </Paragraph>
                           </Paragraphs>
-                          <rd:DefaultName>LOG</rd:DefaultName>
-                          <ToolTip>=iif(Fields!RecoveryModel.Value="FULL",
-	iif(isNothing(Fields!LOG.Value)=True
-		,"Absent LOG backups!"
-		,iif(DateDiff(DateInterval.Day,Fields!LOG.Value,Today())&gt;1
-				,"No LOG backup for the last 1 day!"
-				,Nothing
-			)
-		)
-	,Nothing
-	)</ToolTip>
+                          <rd:DefaultName>AVG_KBs_Transfer</rd:DefaultName>
                           <Style>
                             <Border>
                               <Color>LightGrey</Color>
                               <Style>Solid</Style>
                             </Border>
-                            <BackgroundColor>=iif(Fields!RecoveryModel.Value="FULL",
-	iif(isNothing(Fields!LOG.Value)=True
-		,"Tomato"
-		,iif(DateDiff(DateInterval.Day,Fields!LOG.Value,Today())&gt;1
-				,"Tomato"
-				,"Transparent"
-			)
-		)
-	,"Transparent"
-	)</BackgroundColor>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>=iif(cint((RowNumber(Nothing)/2))*2!=RowNumber(Nothing), "WhiteSmoke", "White")</BackgroundColor>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -1093,211 +1098,37 @@ option (recompile,maxdop 1)</CommandText>
                     </TablixCell>
                     <TablixCell>
                       <CellContents>
-                        <Textbox Name="File_or_filegroup">
+                        <Textbox Name="physical_name">
                           <CanGrow>true</CanGrow>
                           <KeepTogether>true</KeepTogether>
                           <Paragraphs>
                             <Paragraph>
                               <TextRuns>
                                 <TextRun>
-                                  <Value>=Fields!File_or_filegroup.Value</Value>
+                                  <Value>=Fields!physical_name.Value</Value>
                                   <Style>
-                                    <FontFamily>Arial</FontFamily>
-                                    <FontSize>8pt</FontSize>
-                                    <Format>dd MMM yyyy HH:mm</Format>
-                                  </Style>
-                                </TextRun>
-                              </TextRuns>
-                              <Style>
-                                <TextAlign>Center</TextAlign>
-                              </Style>
-                            </Paragraph>
-                          </Paragraphs>
-                          <rd:DefaultName>File_or_filegroup</rd:DefaultName>
-                          <Style>
-                            <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
-                            </Border>
-                            <PaddingLeft>2pt</PaddingLeft>
-                            <PaddingRight>2pt</PaddingRight>
-                            <PaddingTop>2pt</PaddingTop>
-                            <PaddingBottom>2pt</PaddingBottom>
-                          </Style>
-                        </Textbox>
-                      </CellContents>
-                    </TablixCell>
-                    <TablixCell>
-                      <CellContents>
-                        <Textbox Name="Differential_file">
-                          <CanGrow>true</CanGrow>
-                          <KeepTogether>true</KeepTogether>
-                          <Paragraphs>
-                            <Paragraph>
-                              <TextRuns>
-                                <TextRun>
-                                  <Value>=Fields!Differential_file.Value</Value>
-                                  <Style>
-                                    <FontFamily>Arial</FontFamily>
-                                    <FontSize>8pt</FontSize>
-                                    <Format>dd MMM yyyy HH:mm</Format>
-                                  </Style>
-                                </TextRun>
-                              </TextRuns>
-                              <Style>
-                                <TextAlign>Center</TextAlign>
-                              </Style>
-                            </Paragraph>
-                          </Paragraphs>
-                          <rd:DefaultName>Differential_file</rd:DefaultName>
-                          <Style>
-                            <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
-                            </Border>
-                            <PaddingLeft>2pt</PaddingLeft>
-                            <PaddingRight>2pt</PaddingRight>
-                            <PaddingTop>2pt</PaddingTop>
-                            <PaddingBottom>2pt</PaddingBottom>
-                          </Style>
-                        </Textbox>
-                      </CellContents>
-                    </TablixCell>
-                    <TablixCell>
-                      <CellContents>
-                        <Textbox Name="Partial">
-                          <CanGrow>true</CanGrow>
-                          <KeepTogether>true</KeepTogether>
-                          <Paragraphs>
-                            <Paragraph>
-                              <TextRuns>
-                                <TextRun>
-                                  <Value>=Fields!Partial.Value</Value>
-                                  <Style>
-                                    <FontFamily>Arial</FontFamily>
-                                    <FontSize>8pt</FontSize>
-                                    <Format>dd MMM yyyy HH:mm</Format>
-                                  </Style>
-                                </TextRun>
-                              </TextRuns>
-                              <Style>
-                                <TextAlign>Center</TextAlign>
-                              </Style>
-                            </Paragraph>
-                          </Paragraphs>
-                          <rd:DefaultName>Partial</rd:DefaultName>
-                          <Style>
-                            <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
-                            </Border>
-                            <PaddingLeft>2pt</PaddingLeft>
-                            <PaddingRight>2pt</PaddingRight>
-                            <PaddingTop>2pt</PaddingTop>
-                            <PaddingBottom>2pt</PaddingBottom>
-                          </Style>
-                        </Textbox>
-                      </CellContents>
-                    </TablixCell>
-                    <TablixCell>
-                      <CellContents>
-                        <Textbox Name="Differential_partial">
-                          <CanGrow>true</CanGrow>
-                          <KeepTogether>true</KeepTogether>
-                          <Paragraphs>
-                            <Paragraph>
-                              <TextRuns>
-                                <TextRun>
-                                  <Value>=Fields!Differential_partial.Value</Value>
-                                  <Style>
-                                    <FontFamily>Arial</FontFamily>
-                                    <FontSize>8pt</FontSize>
-                                    <Format>dd MMM yyyy HH:mm</Format>
-                                  </Style>
-                                </TextRun>
-                              </TextRuns>
-                              <Style>
-                                <TextAlign>Center</TextAlign>
-                              </Style>
-                            </Paragraph>
-                          </Paragraphs>
-                          <rd:DefaultName>Differential_partial</rd:DefaultName>
-                          <Style>
-                            <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
-                            </Border>
-                            <PaddingLeft>2pt</PaddingLeft>
-                            <PaddingRight>2pt</PaddingRight>
-                            <PaddingTop>2pt</PaddingTop>
-                            <PaddingBottom>2pt</PaddingBottom>
-                          </Style>
-                        </Textbox>
-                      </CellContents>
-                    </TablixCell>
-                    <TablixCell>
-                      <CellContents>
-                        <Textbox Name="Unknown">
-                          <CanGrow>true</CanGrow>
-                          <KeepTogether>true</KeepTogether>
-                          <Paragraphs>
-                            <Paragraph>
-                              <TextRuns>
-                                <TextRun>
-                                  <Value>=Fields!Unknown.Value</Value>
-                                  <Style>
-                                    <FontFamily>Arial</FontFamily>
-                                    <FontSize>8pt</FontSize>
-                                    <Format>dd MMM yyyy HH:mm</Format>
-                                  </Style>
-                                </TextRun>
-                              </TextRuns>
-                              <Style>
-                                <TextAlign>Center</TextAlign>
-                              </Style>
-                            </Paragraph>
-                          </Paragraphs>
-                          <rd:DefaultName>Unknown</rd:DefaultName>
-                          <Style>
-                            <Border>
-                              <Color>LightGrey</Color>
-                              <Style>Solid</Style>
-                            </Border>
-                            <PaddingLeft>2pt</PaddingLeft>
-                            <PaddingRight>2pt</PaddingRight>
-                            <PaddingTop>2pt</PaddingTop>
-                            <PaddingBottom>2pt</PaddingBottom>
-                          </Style>
-                        </Textbox>
-                      </CellContents>
-                    </TablixCell>
-                    <TablixCell>
-                      <CellContents>
-                        <Textbox Name="Note">
-                          <CanGrow>true</CanGrow>
-                          <KeepTogether>true</KeepTogether>
-                          <Paragraphs>
-                            <Paragraph>
-                              <TextRuns>
-                                <TextRun>
-                                  <Value>=Fields!Note.Value</Value>
-                                  <Style>
-                                    <FontFamily>Arial</FontFamily>
                                     <FontSize>8pt</FontSize>
                                   </Style>
                                 </TextRun>
                               </TextRuns>
                               <Style>
-                                <TextAlign>Center</TextAlign>
+                                <TextAlign>Left</TextAlign>
                               </Style>
                             </Paragraph>
                           </Paragraphs>
-                          <rd:DefaultName>Note</rd:DefaultName>
+                          <rd:DefaultName>physical_name</rd:DefaultName>
                           <Style>
                             <Border>
                               <Color>LightGrey</Color>
                               <Style>Solid</Style>
                             </Border>
+                            <LeftBorder>
+                              <Style>None</Style>
+                            </LeftBorder>
+                            <RightBorder>
+                              <Style>None</Style>
+                            </RightBorder>
+                            <BackgroundColor>=iif(cint((RowNumber(Nothing)/2))*2!=RowNumber(Nothing), "WhiteSmoke", "White")</BackgroundColor>
                             <PaddingLeft>2pt</PaddingLeft>
                             <PaddingRight>2pt</PaddingRight>
                             <PaddingTop>2pt</PaddingTop>
@@ -1323,10 +1154,6 @@ option (recompile,maxdop 1)</CommandText>
                 <TablixMember />
                 <TablixMember />
                 <TablixMember />
-                <TablixMember />
-                <TablixMember />
-                <TablixMember />
-                <TablixMember />
               </TablixMembers>
             </TablixColumnHierarchy>
             <TablixRowHierarchy>
@@ -1339,39 +1166,41 @@ option (recompile,maxdop 1)</CommandText>
                 </TablixMember>
               </TablixMembers>
             </TablixRowHierarchy>
-            <DataSetName>dsBackups</DataSetName>
-            <Top>0.95278cm</Top>
-            <Left>0.31071cm</Left>
+            <DataSetName>dsDiskLatencyPerFile</DataSetName>
+            <Top>0.94229cm</Top>
+            <Left>0.16888cm</Left>
             <Height>1.09417cm</Height>
-            <Width>40.47497cm</Width>
+            <Width>41.43182cm</Width>
             <Style>
               <Border>
                 <Style>None</Style>
               </Border>
             </Style>
           </Tablix>
-          <Textbox Name="Textbox27">
+          <Textbox Name="Textbox34">
             <CanGrow>true</CanGrow>
             <KeepTogether>true</KeepTogether>
             <Paragraphs>
               <Paragraph>
                 <TextRuns>
                   <TextRun>
-                    <Value>Last Backups</Value>
+                    <Value>Database Files Latency</Value>
                     <Style>
                       <FontSize>12pt</FontSize>
                       <FontWeight>Bold</FontWeight>
                     </Style>
                   </TextRun>
                 </TextRuns>
-                <Style />
+                <Style>
+                  <TextAlign>Center</TextAlign>
+                </Style>
               </Paragraph>
             </Paragraphs>
-            <rd:DefaultName>Textbox27</rd:DefaultName>
-            <Top>0.17639cm</Top>
-            <Left>0.34078cm</Left>
+            <rd:DefaultName>Textbox34</rd:DefaultName>
+            <Top>0.1659cm</Top>
+            <Left>0.16888cm</Left>
             <Height>0.6cm</Height>
-            <Width>3.77cm</Width>
+            <Width>41.08786cm</Width>
             <ZIndex>1</ZIndex>
             <Style>
               <Border>
@@ -1384,17 +1213,46 @@ option (recompile,maxdop 1)</CommandText>
             </Style>
           </Textbox>
         </ReportItems>
-        <Height>5.33333in</Height>
+        <Height>8.73125cm</Height>
         <Style />
       </Body>
-      <Width>16.1875in</Width>
+      <Width>42.63729cm</Width>
       <Page>
         <PageHeader>
-          <Height>1.64042cm</Height>
+          <Height>1.34053cm</Height>
           <PrintOnFirstPage>true</PrintOnFirstPage>
           <PrintOnLastPage>true</PrintOnLastPage>
           <ReportItems>
-            <Textbox Name="Textbox30">
+            <Image Name="Image1">
+              <Source>Embedded</Source>
+              <Value>back_button</Value>
+              <Sizing>FitProportional</Sizing>
+              <ActionInfo>
+                <Actions>
+                  <Action>
+                    <Drillthrough>
+                      <ReportName>QuickOverview</ReportName>
+                      <Parameters>
+                        <Parameter Name="SQLServer">
+                          <Value>=Parameters!SQLServer.Value</Value>
+                        </Parameter>
+                      </Parameters>
+                    </Drillthrough>
+                  </Action>
+                </Actions>
+              </ActionInfo>
+              <Top>0.04815cm</Top>
+              <Left>0cm</Left>
+              <Height>1.1825cm</Height>
+              <Width>1.28833cm</Width>
+              <ToolTip>Back</ToolTip>
+              <Style>
+                <Border>
+                  <Style>None</Style>
+                </Border>
+              </Style>
+            </Image>
+            <Textbox Name="Textbox29">
               <CanGrow>true</CanGrow>
               <KeepTogether>true</KeepTogether>
               <Paragraphs>
@@ -1414,10 +1272,11 @@ option (recompile,maxdop 1)</CommandText>
                 </Paragraph>
               </Paragraphs>
               <rd:DefaultName>Textbox29</rd:DefaultName>
-              <Top>0.14077in</Top>
-              <Left>0.90171in</Left>
+              <Top>0.14583in</Top>
+              <Left>0.57666in</Left>
               <Height>0.25in</Height>
               <Width>1.34028in</Width>
+              <ZIndex>1</ZIndex>
               <Style>
                 <Border>
                   <Style>None</Style>
@@ -1447,11 +1306,11 @@ option (recompile,maxdop 1)</CommandText>
                 </Paragraph>
               </Paragraphs>
               <rd:DefaultName>SQLServer</rd:DefaultName>
-              <Top>0.14077in</Top>
-              <Left>2.36004in</Left>
+              <Top>0.14583in</Top>
+              <Left>2.03499in</Left>
               <Height>0.25in</Height>
-              <Width>4.1454in</Width>
-              <ZIndex>1</ZIndex>
+              <Width>4.04167in</Width>
+              <ZIndex>2</ZIndex>
               <Style>
                 <Border>
                   <Style>None</Style>
@@ -1478,7 +1337,7 @@ option (recompile,maxdop 1)</CommandText>
   + right(cstr(100+datepart(DateInterval.Second,globals!ExecutionTime)),2)</Value>
                       <Style>
                         <FontWeight>Bold</FontWeight>
-                        <Color>Silver</Color>
+                        <Color>DimGray</Color>
                       </Style>
                     </TextRun>
                   </TextRuns>
@@ -1487,16 +1346,15 @@ option (recompile,maxdop 1)</CommandText>
                   </Style>
                 </Paragraph>
               </Paragraphs>
-              <Top>0.06681in</Top>
-              <Left>9.69688in</Left>
+              <Left>12.21875in</Left>
               <Height>0.25in</Height>
               <Width>2.90625in</Width>
-              <ZIndex>2</ZIndex>
+              <ZIndex>3</ZIndex>
               <Style>
                 <Border>
                   <Style>None</Style>
                 </Border>
-                <BackgroundColor>Gray</BackgroundColor>
+                <BackgroundColor>LightGrey</BackgroundColor>
                 <PaddingLeft>2pt</PaddingLeft>
                 <PaddingRight>2pt</PaddingRight>
                 <PaddingTop>2pt</PaddingTop>
@@ -1513,7 +1371,7 @@ option (recompile,maxdop 1)</CommandText>
                       <Value>="Page " &amp; Globals!PageNumber &amp; " of " &amp; Globals!TotalPages</Value>
                       <Style>
                         <FontWeight>Bold</FontWeight>
-                        <Color>Silver</Color>
+                        <Color>DimGray</Color>
                       </Style>
                     </TextRun>
                   </TextRuns>
@@ -1522,66 +1380,37 @@ option (recompile,maxdop 1)</CommandText>
                   </Style>
                 </Paragraph>
               </Paragraphs>
-              <Top>0.33069in</Top>
-              <Left>9.69688in</Left>
+              <Top>0.26388in</Top>
+              <Left>12.21875in</Left>
               <Height>0.25in</Height>
               <Width>2.90625in</Width>
-              <ZIndex>3</ZIndex>
+              <ZIndex>4</ZIndex>
               <Style>
                 <Border>
                   <Style>None</Style>
                 </Border>
-                <BackgroundColor>Gray</BackgroundColor>
+                <BackgroundColor>LightGrey</BackgroundColor>
                 <PaddingLeft>2pt</PaddingLeft>
                 <PaddingRight>2pt</PaddingRight>
                 <PaddingTop>2pt</PaddingTop>
                 <PaddingBottom>2pt</PaddingBottom>
               </Style>
             </Textbox>
-            <Image Name="Image1">
-              <Source>Embedded</Source>
-              <Value>back_button</Value>
-              <Sizing>FitProportional</Sizing>
-              <ActionInfo>
-                <Actions>
-                  <Action>
-                    <Drillthrough>
-                      <ReportName>QuickOverview</ReportName>
-                      <Parameters>
-                        <Parameter Name="SQLServer">
-                          <Value>=Parameters!SQLServer.Value</Value>
-                        </Parameter>
-                      </Parameters>
-                    </Drillthrough>
-                  </Action>
-                </Actions>
-              </ActionInfo>
-              <Top>0.07021cm</Top>
-              <Left>0.05234cm</Left>
-              <Height>1.5cm</Height>
-              <Width>1.5cm</Width>
-              <ZIndex>4</ZIndex>
-              <ToolTip>Back</ToolTip>
-              <Style>
-                <Border>
-                  <Style>None</Style>
-                </Border>
-              </Style>
-            </Image>
           </ReportItems>
           <Style>
             <Border>
               <Style>None</Style>
             </Border>
+            <BackgroundColor>WhiteSmoke</BackgroundColor>
           </Style>
         </PageHeader>
-        <PageHeight>70cm</PageHeight>
+        <PageHeight>21cm</PageHeight>
         <PageWidth>29.7cm</PageWidth>
-        <LeftMargin>2cm</LeftMargin>
-        <RightMargin>2cm</RightMargin>
-        <TopMargin>2cm</TopMargin>
-        <BottomMargin>2cm</BottomMargin>
-        <ColumnSpacing>0.13cm</ColumnSpacing>
+        <LeftMargin>2.54cm</LeftMargin>
+        <RightMargin>2.54cm</RightMargin>
+        <TopMargin>2.54cm</TopMargin>
+        <BottomMargin>2.54cm</BottomMargin>
+        <ColumnSpacing>1.27cm</ColumnSpacing>
         <Style />
       </Page>
     </ReportSection>
@@ -1589,7 +1418,11 @@ option (recompile,maxdop 1)</CommandText>
   <ReportParameters>
     <ReportParameter Name="SQLServer">
       <DataType>String</DataType>
-      <Nullable>true</Nullable>
+      <DefaultValue>
+        <Values>
+          <Value>nl000sql08</Value>
+        </Values>
+      </DefaultValue>
       <Prompt>ReportParameter1</Prompt>
       <Hidden>true</Hidden>
     </ReportParameter>
@@ -1625,5 +1458,5 @@ T57cRzIzPfjgg+pfYGhStcmg6EVQE01hNlasQ+JoEv9Jo5+WAf0jqMVatD+sSdZazHj+nv3111+v8qRI
     </EmbeddedImage>
   </EmbeddedImages>
   <rd:ReportUnitType>Cm</rd:ReportUnitType>
-  <rd:ReportID>78efe5a0-e824-47f1-9c22-65757e753cae</rd:ReportID>
+  <rd:ReportID>67eef632-6b37-4797-8943-668633a43631</rd:ReportID>
 </Report>

@@ -662,6 +662,16 @@ else
                             </Paragraph>
                           </Paragraphs>
                           <rd:DefaultName>errorlogtext</rd:DefaultName>
+                          <ActionInfo>
+                            <Actions>
+                              <Action>
+                                <Hyperlink>=iif(InStr(Fields!errorlogtext.Value,"Error:")&gt;0
+	,"https://www.google.com/search?q="+Fields!errorlogtext.Value
+	,Nothing
+	)</Hyperlink>
+                              </Action>
+                            </Actions>
+                          </ActionInfo>
                           <Style>
                             <Border>
                               <Color>LightGrey</Color>
@@ -673,6 +683,7 @@ else
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
                         </Textbox>
+                        <rd:Selected>true</rd:Selected>
                       </CellContents>
                     </TablixCell>
                   </TablixCells>
@@ -1206,11 +1217,6 @@ else
   <ReportParameters>
     <ReportParameter Name="SQLServer">
       <DataType>String</DataType>
-      <DefaultValue>
-        <Values>
-          <Value>EURV131502\DBA_UAT_01</Value>
-        </Values>
-      </DefaultValue>
       <Prompt>SQLServer</Prompt>
       <Hidden>true</Hidden>
     </ReportParameter>

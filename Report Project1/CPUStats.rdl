@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner">
-  <AutoRefresh>0</AutoRefresh>
+  <AutoRefresh>1</AutoRefresh>
   <DataSources>
     <DataSource Name="DataSource1">
       <Transaction>true</Transaction>
@@ -397,6 +397,13 @@ and t2.dt=(select t2 from recs)</CommandText>
                         </Border>
                       </Style>
                     </ChartMinorGridLines>
+                    <ChartMajorTickMarks>
+                      <Style>
+                        <Border>
+                          <Style>Dotted</Style>
+                        </Border>
+                      </Style>
+                    </ChartMajorTickMarks>
                     <ChartMinorTickMarks>
                       <Length>0.5</Length>
                     </ChartMinorTickMarks>
@@ -548,7 +555,7 @@ and t2.dt=(select t2 from recs)</CommandText>
             </ChartLegends>
             <ChartTitles>
               <ChartTitle Name="Default">
-                <Caption>Scheduler's Workload (Load Factor)</Caption>
+                <Caption>Scheduler's Load Factor</Caption>
                 <Style>
                   <BackgroundGradientType>None</BackgroundGradientType>
                   <FontSize>12pt</FontSize>
@@ -654,7 +661,9 @@ and t2.dt=(select t2 from recs)</CommandText>
                   <ChartDataPoints>
                     <ChartDataPoint>
                       <ChartDataPointValues>
-                        <Y>=Sum(Fields!current_workers_count.Value)-sum(Fields!active_workers_count.Value)</Y>
+                        <Y>=iif(Sum(Fields!current_workers_count.Value)-sum(Fields!active_workers_count.Value)=0
+	,Nothing
+	,Sum(Fields!current_workers_count.Value)-sum(Fields!active_workers_count.Value))</Y>
                       </ChartDataPointValues>
                       <ChartDataLabel>
                         <Style />
@@ -706,7 +715,7 @@ and t2.dt=(select t2 from recs)</CommandText>
                   <ChartDataPoints>
                     <ChartDataPoint>
                       <ChartDataPointValues>
-                        <Y>=Sum(Fields!active_workers_count.Value)</Y>
+                        <Y>=iif(Sum(Fields!active_workers_count.Value)=0,Nothing,Sum(Fields!active_workers_count.Value))</Y>
                       </ChartDataPointValues>
                       <ChartDataLabel>
                         <Style />
@@ -758,7 +767,7 @@ and t2.dt=(select t2 from recs)</CommandText>
                   <ChartDataPoints>
                     <ChartDataPoint>
                       <ChartDataPointValues>
-                        <Y>=Sum(Fields!work_queue_count.Value)</Y>
+                        <Y>=iif(Sum(Fields!work_queue_count.Value)=0, Nothing,Sum(Fields!work_queue_count.Value))</Y>
                       </ChartDataPointValues>
                       <ChartDataLabel>
                         <Style />
@@ -1381,7 +1390,7 @@ and t2.dt=(select t2 from recs)</CommandText>
             </Style>
           </Chart>
         </ReportItems>
-        <Height>31.27376cm</Height>
+        <Height>19.07647cm</Height>
         <Style />
       </Body>
       <Width>38.07037cm</Width>
@@ -1588,13 +1597,7 @@ and t2.dt=(select t2 from recs)</CommandText>
   <ReportParameters>
     <ReportParameter Name="SQLServer">
       <DataType>String</DataType>
-      <DefaultValue>
-        <Values>
-          <Value>bxts131078\websense_prd_01</Value>
-        </Values>
-      </DefaultValue>
       <Prompt>SQLServer</Prompt>
-      <Hidden>true</Hidden>
     </ReportParameter>
   </ReportParameters>
   <ReportParametersLayout>

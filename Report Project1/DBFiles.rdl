@@ -6,7 +6,8 @@
       <Transaction>true</Transaction>
       <ConnectionProperties>
         <DataProvider>SQL</DataProvider>
-        <ConnectString>="Data Source="&amp;Parameters!SQLServer.Value</ConnectString>
+        <ConnectString>="Data Source=" + Parameters!SQLServer.Value
++";Application Name=Report:DBFiles"</ConnectString>
         <IntegratedSecurity>true</IntegratedSecurity>
       </ConnectionProperties>
       <rd:SecurityType>Integrated</rd:SecurityType>
@@ -174,7 +175,8 @@ create  table #files
 	SpaceFreeMB numeric(10,2),
 	[Status] varchar(50),
 	MaxSizeMB varchar(20),
-	Growth varchar(20) 
+	Growth varchar(20),
+	FileID smallint
 	)
 declare @d varchar(128)
 declare @cmd varchar(4096)
@@ -217,12 +219,12 @@ while exists (select top 1 1 from @db)
 								when df.is_percent_growth=1 then convert(varchar(20),df.growth)+''%''
 								else 
 								convert(varchar(20),convert(int,df.growth/128.))+'' MB'' end as [Growth]
-
+							, df.file_id
 						from sys.database_files df 
 						where physical_name like '''+@ddrive+'%''
 						option (recompile)'
 
-		insert into #files (Drive,DBName,FileType,LogicalName,PhysicalName,SizeMB,Comment,[FileGroup],SpaceUsedMB,SpaceFreeMB,[Status],MaxSizeMB,Growth)
+		insert into #files (Drive,DBName,FileType,LogicalName,PhysicalName,SizeMB,Comment,[FileGroup],SpaceUsedMB,SpaceFreeMB,[Status],MaxSizeMB,Growth,FileID)
 		exec (@cmd)
 
 		set @cmd=''
@@ -245,7 +247,8 @@ select
 	,SpaceFreeMB
 	,[Status]
 	,MaxSizeMB
-	,Growth 
+	,Growth
+	,FileID
 from #files 
 where PhysicalName like '''+@ddrive+ '%'''
 
@@ -312,6 +315,10 @@ drop table #files </CommandText>
         </Field>
         <Field Name="Growth">
           <DataField>Growth</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
+        <Field Name="FileID">
+          <DataField>FileID</DataField>
           <rd:UserDefined>true</rd:UserDefined>
         </Field>
       </Fields>
@@ -421,6 +428,9 @@ drop table #total</CommandText>
                 </TablixColumn>
                 <TablixColumn>
                   <Width>0.68217in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>0.72384in</Width>
                 </TablixColumn>
               </TablixColumns>
               <TablixRows>
@@ -874,6 +884,42 @@ drop table #total</CommandText>
                         </Textbox>
                       </CellContents>
                     </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox12">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>DB Objects</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox12</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
                   </TablixCells>
                 </TablixRow>
                 <TablixRow>
@@ -1266,12 +1312,73 @@ drop table #total</CommandText>
                         </Textbox>
                       </CellContents>
                     </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox17">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>View</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <TextDecoration>Underline</TextDecoration>
+                                    <Color>Blue</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style>
+                                <TextAlign>Center</TextAlign>
+                              </Style>
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox17</rd:DefaultName>
+                          <ActionInfo>
+                            <Actions>
+                              <Action>
+                                <Drillthrough>
+                                  <ReportName>DBInformation_Objects</ReportName>
+                                  <Parameters>
+                                    <Parameter Name="SQLServer">
+                                      <Value>=Parameters!SQLServer.Value</Value>
+                                    </Parameter>
+                                    <Parameter Name="DBName">
+                                      <Value>=Fields!DBName.Value</Value>
+                                    </Parameter>
+                                    <Parameter Name="FileID">
+                                      <Value>=Fields!FileID.Value</Value>
+                                    </Parameter>
+                                  </Parameters>
+                                </Drillthrough>
+                              </Action>
+                            </Actions>
+                          </ActionInfo>
+                          <Visibility>
+                            <Hidden>=iif(Fields!FileType.Value="LOG",true,false)</Hidden>
+                          </Visibility>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                        <rd:Selected>true</rd:Selected>
+                      </CellContents>
+                    </TablixCell>
                   </TablixCells>
                 </TablixRow>
               </TablixRows>
             </TablixBody>
             <TablixColumnHierarchy>
               <TablixMembers>
+                <TablixMember />
                 <TablixMember />
                 <TablixMember />
                 <TablixMember />
@@ -1297,7 +1404,7 @@ drop table #total</CommandText>
             <Top>2.341in</Top>
             <Left>0.11959in</Left>
             <Height>0.36458in</Height>
-            <Width>16.41648in</Width>
+            <Width>17.14032in</Width>
             <Style>
               <Border>
                 <Style>None</Style>
@@ -2883,7 +2990,7 @@ formatnumber(Fields!total.Value-Fields!free.Value-Fields!usedbyfiles.Value,2)
         <Height>15.37166cm</Height>
         <Style />
       </Body>
-      <Width>42.25263cm</Width>
+      <Width>44.50162cm</Width>
       <Page>
         <PageHeader>
           <Height>1.65557cm</Height>

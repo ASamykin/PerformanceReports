@@ -1069,6 +1069,9 @@ option (maxdop 1,recompile)</CommandText>
                             </Paragraph>
                           </Paragraphs>
                           <rd:DefaultName>TraceStatus</rd:DefaultName>
+                          <ToolTip>="Start: exec sp_trace_setstatus "+cstr(Fields!id.Value)+", 1"+chr(10)
++"Stop: exec sp_trace_setstatus "+cstr(Fields!id.Value)+", 0"+chr(10)
++"Close: exec sp_trace_setstatus "+cstr(Fields!id.Value)+", 2"+chr(10)</ToolTip>
                           <Style>
                             <Border>
                               <Color>LightGrey</Color>
@@ -1081,6 +1084,7 @@ option (maxdop 1,recompile)</CommandText>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
                         </Textbox>
+                        <rd:Selected>true</rd:Selected>
                       </CellContents>
                     </TablixCell>
                     <TablixCell>
@@ -4260,7 +4264,7 @@ option (maxdop 1,recompile)</CommandText>
       <DataType>String</DataType>
       <DefaultValue>
         <Values>
-          <Value>EURV131502\DBA_UAT_01</Value>
+          <Value>.\x1</Value>
         </Values>
       </DefaultValue>
       <Prompt>SQLServer</Prompt>

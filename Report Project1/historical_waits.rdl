@@ -5,7 +5,8 @@
     <DataSource Name="DataSource1">
       <ConnectionProperties>
         <DataProvider>SQL</DataProvider>
-        <ConnectString>="Data Source="+Parameters!SQLServer.Value</ConnectString>
+        <ConnectString>="Data Source="+Parameters!SQLServer.Value
++";Application Name=Report:"+Globals!ReportName</ConnectString>
         <IntegratedSecurity>true</IntegratedSecurity>
       </ConnectionProperties>
       <rd:SecurityType>Integrated</rd:SecurityType>
@@ -13,84 +14,83 @@
     </DataSource>
   </DataSources>
   <DataSets>
-    <DataSet Name="CHECK_DEPENDENCIES">
+    <DataSet Name="dsWaits">
       <Query>
         <DataSourceName>DataSource1</DataSourceName>
-        <CommandText>/*
-if not exists (select * from msdb.sys.objects o
-			join msdb.sys.schemas s on o.schema_id = s.schema_id 
-		where o.name = N'fn_QueryTextFromHandle' and s.name = N'MS_PerfDashboard')
-begin
-	RAISERROR('The stored procedures and functions required by the performance dashboard have not yet been installed.  A database administrator must run the SETUP.SQL script (supplied with the reports) on each SQL Server instance that will be monitored via the dashboard reports.', 18, 1)
-end
+        <CommandText>with cats (col,cat) as 
+(
+select N'LCK_M_%'					,N'Lock'			union all
+select N'LATCH_%'					,N'Latch'			union all
+select N'PAGELATCH_%'				,N'Buffer Latch'	union all
+select N'PAGEIOLATCH_%'				,N'Buffer IO'		union all
+select N'RESOURCE_SEMAPHORE_%'		,N'Compilation'		union all
+select N'SOS_SCHEDULER_YIELD'		,N'Scheduler Yield'	union all
 
-exec msdb.MS_PerfDashboard.usp_CheckDependencies
-*/
+select N'LOGMGR'					,N'Logging'			union all
+select N'LOGBUFFER'					,N'Logging'			union all
+select N'LOGMGR_RESERVE_APPEND'		,N'Logging'			union all
+select N'LOGMGR_FLUSH'				,N'Logging'			union all
+select N'WRITELOG'					,N'Logging'			union all
 
-select '' [major_version],'' [minor_version], '' [build_version]</CommandText>
-        <rd:UseGenericDesigner>true</rd:UseGenericDesigner>
-      </Query>
-      <Fields>
-        <Field Name="major_version">
-          <DataField>major_version</DataField>
-          <rd:TypeName>System.Byte</rd:TypeName>
-        </Field>
-        <Field Name="minor_version">
-          <DataField>minor_version</DataField>
-          <rd:TypeName>System.Byte</rd:TypeName>
-        </Field>
-        <Field Name="build_number">
-          <DataField>build_number</DataField>
-          <rd:TypeName>System.Int16</rd:TypeName>
-        </Field>
-      </Fields>
-    </DataSet>
-    <DataSet Name="DM_OS_WAIT_STATS">
-      <Query>
-        <DataSourceName>DataSource1</DataSourceName>
-        <CommandText>
+
+select N'ASYNC_NETWORK_IO'			,N'Network IO'		union all
+select N'NET_WAITFOR_PACKET'		,N'Network IO'		union all
+
+select N'CXPACKET'					,N'Parallelism'		union all
+select N'EXCHANGE'					,N'Parallelism'		union all
+select N'CXROWSET_SYNC'				,N'Parallelism'		union all
+select N'CXCONSUMER'				,N'Parallelism'		union all
+
+select N'RESOURCE_SEMAPHORE'		,N'Memory'			union all
+select N'CMEMTHREAD'				,N'Memory'			union all
+select N'SOS_RESERVEDMEMBLOCKLIST'	,N'Memory'			union all
+
+select N'CLR_%'						,N'CLR'				union all
+select N'SQLCLR%'					,N'CLR'				union all
+
+select N'DBMIRROR%'					,N'Mirroring'		union all
+select N'MIRROR_SEND_MESSAGE'		,N'Mirroring'		union all
+
+select N'%HADR%'					,N'AlwaysOn'		union all
+select N'REDO_THREAD_PENDING_WORK'	,N'AlwaysOn'		union all
+
+select N'XACT%'						,N'Transaction'		union all
+select N'DTC_%'						,N'Transaction'		union all
+select N'TRAN_MARKLATCH_%'			,N'Transaction'		union all
+select N'MSQL_XACT_%'				,N'Transaction'		union all
+select N'TRANSACTION_MUTEX'			,N'Transaction'		union all
+
+select N'SLEEP_%'					,N'Sleep'			union all
+select N'LAZYWRITER_SLEEP'			,N'Sleep'			union all
+select N'SQLTRACE_BUFFER_FLUSH'		,N'Sleep'			union all
+select N'WAITFOR'					,N'Sleep'			union all
+select N'WAIT_FOR_RESULTS'			,N'Sleep'			union all
+
+select N'PARALLEL_BACKUP_QUEUE'		,N'Backup'			union all
+select N'BACKUPBUFFER'				,N'Backup'			union all
+select N'BACKUPIO'					,N'Backup'			union all
+select N'BACKUPTHREAD'				,N'Backup'           	
+)
 
 select 
-wait_type, 
-                case
-                        when wait_type like N'LCK_M_%' then N'Lock'
-                        when wait_type like N'LATCH_%' then N'Latch'
-                        when wait_type like N'PAGELATCH_%' then N'Buffer Latch'
-                        when wait_type like N'PAGEIOLATCH_%' then N'Buffer IO'
-                        when wait_type like N'RESOURCE_SEMAPHORE_%' then N'Compilation'
-                        when wait_type = N'SOS_SCHEDULER_YIELD' then N'Scheduler Yield'
-                        when wait_type in (N'LOGMGR', N'LOGBUFFER',
-N'LOGMGR_RESERVE_APPEND', N'LOGMGR_FLUSH', N'WRITELOG') then
-N'Logging'
-                        when wait_type in (N'ASYNC_NETWORK_IO', N'NET_WAITFOR_PACKET')
-then N'Network IO'
-                        when wait_type in (N'CXPACKET', N'EXCHANGE',N'CXROWSET_SYNC') then N'Parallelism'
-                        when wait_type in (N'RESOURCE_SEMAPHORE', N'CMEMTHREAD',
-N'SOS_RESERVEDMEMBLOCKLIST') then N'Memory'
-                        when wait_type like N'CLR_%' or wait_type like N'SQLCLR%' then
-N'CLR'
-                        when wait_type like N'DBMIRROR%' or wait_type =
-N'MIRROR_SEND_MESSAGE' then N'Mirroring'
-                        when (wait_type like N'%HADR%' or wait_type=N'REDO_THREAD_PENDING_WORK')  then N'AlwaysOn'
-                        when wait_type like N'XACT%' or wait_type like N'DTC_%' or
-wait_type like N'TRAN_MARKLATCH_%' or wait_type like N'MSQL_XACT_%'
-or wait_type = N'TRANSACTION_MUTEX' then N'Transaction'
-                        when wait_type like N'SLEEP_%' or wait_type in
-(N'LAZYWRITER_SLEEP', N'SQLTRACE_BUFFER_FLUSH', N'WAITFOR',
-N'WAIT_FOR_RESULTS') then N'Sleep'
-                        when wait_type in (N'PARALLEL_BACKUP_QUEUE', N'BACKUPBUFFER',
-N'BACKUPIO', N'BACKUPTHREAD') then
-N'Backup'
-                        else N'Other'
-                end as wait_category,
-waiting_tasks_count as num_waits, 
-wait_time_ms as wait_time,
-max_wait_time_ms
-from sys.dm_os_wait_stats
-where waiting_tasks_count &gt; 0</CommandText>
+	dense_rank() over ( order by isnull(c.cat,N'Other')) [n]
+	,wait_type
+    ,isnull(c.cat,N'Other') [wait_category]
+	,waiting_tasks_count [num_waits]
+	,wait_time_ms [wait_time]
+	,max_wait_time_ms
+from 
+	sys.dm_os_wait_stats d
+	left join cats c on d.wait_type like c.col
+where waiting_tasks_count &gt; 0
+option (recompile)</CommandText>
         <rd:UseGenericDesigner>true</rd:UseGenericDesigner>
       </Query>
       <Fields>
+        <Field Name="n">
+          <DataField>n</DataField>
+          <rd:UserDefined>true</rd:UserDefined>
+        </Field>
         <Field Name="wait_type">
           <DataField>wait_type</DataField>
           <rd:TypeName>System.String</rd:TypeName>
@@ -113,6 +113,80 @@ where waiting_tasks_count &gt; 0</CommandText>
         </Field>
       </Fields>
     </DataSet>
+    <DataSet Name="dsLastReset">
+      <Query>
+        <DataSourceName>DataSource1</DataSourceName>
+        <CommandText>
+;with FilePath (fp,num) as 
+(
+	select left(path,len(path)-charindex('_',reverse(path)))+right(path,4), max_files 
+		from sys.traces
+	where id=1
+ )
+ select	top 10
+	te.name 
+	,ft.SPID
+	,ft.LoginName
+	,ft.Hostname
+	,ft.ClientProcessID
+	,ft.DatabaseName
+	,ft.StartTime
+	,ft.ApplicationName
+	,ft.TextData
+	,ft.Success
+from FilePath f
+	cross apply ::fn_trace_gettable(f.fp, f.num) ft 
+join sys.trace_events te on ft.EventClass = te.trace_event_id 
+where 
+	te.name = 'Audit DBCC Event' and 
+	ft.TextData like '%dbcc sqlperf(%sys.dm_os_wait_stats%clear)%'
+
+order by ft.StartTime desc	
+option (maxdop 1,recompile)</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="name">
+          <DataField>name</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="SPID">
+          <DataField>SPID</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="LoginName">
+          <DataField>LoginName</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Hostname">
+          <DataField>Hostname</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="ClientProcessID">
+          <DataField>ClientProcessID</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="DatabaseName">
+          <DataField>DatabaseName</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="StartTime">
+          <DataField>StartTime</DataField>
+          <rd:TypeName>System.DateTime</rd:TypeName>
+        </Field>
+        <Field Name="ApplicationName">
+          <DataField>ApplicationName</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="TextData">
+          <DataField>TextData</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Success">
+          <DataField>Success</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
   </DataSets>
   <ReportSections>
     <ReportSection>
@@ -124,10 +198,10 @@ where waiting_tasks_count &gt; 0</CommandText>
                 <TablixBody>
                   <TablixColumns>
                     <TablixColumn>
-                      <Width>0.625in</Width>
+                      <Width>0.30903in</Width>
                     </TablixColumn>
                     <TablixColumn>
-                      <Width>2.625in</Width>
+                      <Width>2.92014in</Width>
                     </TablixColumn>
                     <TablixColumn>
                       <Width>1.25in</Width>
@@ -158,9 +232,9 @@ where waiting_tasks_count &gt; 0</CommandText>
                                 <Paragraph>
                                   <TextRuns>
                                     <TextRun>
-                                      <Value>Wait Category</Value>
+                                      <Value>Category</Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                         <FontWeight>Bold</FontWeight>
                                       </Style>
@@ -173,9 +247,9 @@ where waiting_tasks_count &gt; 0</CommandText>
                               <ZIndex>25</ZIndex>
                               <Style>
                                 <Border>
-                                  <Style>Solid</Style>
+                                  <Style>None</Style>
                                 </Border>
-                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <BackgroundColor>WhiteSmoke</BackgroundColor>
                                 <PaddingLeft>2pt</PaddingLeft>
                                 <PaddingRight>2pt</PaddingRight>
                                 <PaddingTop>2pt</PaddingTop>
@@ -195,16 +269,16 @@ where waiting_tasks_count &gt; 0</CommandText>
                                 <Paragraph>
                                   <TextRuns>
                                     <TextRun>
-                                      <Value>Number of Waits</Value>
+                                      <Value>Waits Total</Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                         <FontWeight>Bold</FontWeight>
                                       </Style>
                                     </TextRun>
                                   </TextRuns>
                                   <Style>
-                                    <TextAlign>Left</TextAlign>
+                                    <TextAlign>Center</TextAlign>
                                   </Style>
                                 </Paragraph>
                               </Paragraphs>
@@ -212,9 +286,9 @@ where waiting_tasks_count &gt; 0</CommandText>
                               <ZIndex>24</ZIndex>
                               <Style>
                                 <Border>
-                                  <Style>Solid</Style>
+                                  <Style>None</Style>
                                 </Border>
-                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <BackgroundColor>WhiteSmoke</BackgroundColor>
                                 <PaddingLeft>2pt</PaddingLeft>
                                 <PaddingRight>2pt</PaddingRight>
                                 <PaddingTop>2pt</PaddingTop>
@@ -234,7 +308,7 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value>Wait Time (sec)</Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                         <FontWeight>Bold</FontWeight>
                                       </Style>
@@ -249,9 +323,9 @@ where waiting_tasks_count &gt; 0</CommandText>
                               <ZIndex>23</ZIndex>
                               <Style>
                                 <Border>
-                                  <Style>Solid</Style>
+                                  <Style>None</Style>
                                 </Border>
-                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <BackgroundColor>WhiteSmoke</BackgroundColor>
                                 <PaddingLeft>2pt</PaddingLeft>
                                 <PaddingRight>2pt</PaddingRight>
                                 <PaddingTop>2pt</PaddingTop>
@@ -271,14 +345,14 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value>% Wait Time</Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                         <FontWeight>Bold</FontWeight>
                                       </Style>
                                     </TextRun>
                                   </TextRuns>
                                   <Style>
-                                    <TextAlign>Left</TextAlign>
+                                    <TextAlign>Center</TextAlign>
                                   </Style>
                                 </Paragraph>
                               </Paragraphs>
@@ -286,9 +360,9 @@ where waiting_tasks_count &gt; 0</CommandText>
                               <ZIndex>22</ZIndex>
                               <Style>
                                 <Border>
-                                  <Style>Solid</Style>
+                                  <Style>None</Style>
                                 </Border>
-                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <BackgroundColor>WhiteSmoke</BackgroundColor>
                                 <PaddingLeft>2pt</PaddingLeft>
                                 <PaddingRight>2pt</PaddingRight>
                                 <PaddingTop>2pt</PaddingTop>
@@ -308,7 +382,7 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value />
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                         <FontWeight>Bold</FontWeight>
                                       </Style>
@@ -339,7 +413,7 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value />
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                         <FontWeight>Bold</FontWeight>
                                       </Style>
@@ -375,7 +449,7 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value>=Fields!wait_category.Value</Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                       </Style>
                                     </TextRun>
@@ -384,11 +458,19 @@ where waiting_tasks_count &gt; 0</CommandText>
                                 </Paragraph>
                               </Paragraphs>
                               <ZIndex>19</ZIndex>
+                              <ToolTip>=iif(Fields!wait_category.Value="Sleep"
+	,"Waits in the Sleep category are typically delays incurred by background tasks waiting for more work.  A high wait time in this category is usually not indicative of any performance problem."
+	,Nothing
+	)</ToolTip>
                               <Style>
                                 <Border>
                                   <Color>Gainsboro</Color>
                                   <Style>Solid</Style>
                                 </Border>
+                                <BackgroundColor>=Choose(Fields!n.Value,
+"#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd","#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf"
+,"#8dd3c7","#ffffb3","#bebada","#fb8072","#80b1d3","#fdb462","#b3de69","#fccde5","#d9d9d9","#bc80bd","#ccebc5","#ffed6f"
+)</BackgroundColor>
                                 <PaddingLeft>2pt</PaddingLeft>
                                 <PaddingRight>2pt</PaddingRight>
                                 <PaddingTop>2pt</PaddingTop>
@@ -410,13 +492,14 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value>=Sum(Fields!num_waits.Value)</Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
+                                        <Format>#,0;(#,0)</Format>
                                       </Style>
                                     </TextRun>
                                   </TextRuns>
                                   <Style>
-                                    <TextAlign>Right</TextAlign>
+                                    <TextAlign>Center</TextAlign>
                                   </Style>
                                 </Paragraph>
                               </Paragraphs>
@@ -446,13 +529,14 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value>=Sum(Fields!wait_time.Value)/1000</Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
+                                        <Format>#,0.00;(#,0.00)</Format>
                                       </Style>
                                     </TextRun>
                                   </TextRuns>
                                   <Style>
-                                    <TextAlign>Right</TextAlign>
+                                    <TextAlign>Center</TextAlign>
                                   </Style>
                                 </Paragraph>
                               </Paragraphs>
@@ -480,15 +564,16 @@ where waiting_tasks_count &gt; 0</CommandText>
                                 <Paragraph>
                                   <TextRuns>
                                     <TextRun>
-                                      <Value>=FormatPercent(Sum(Fields!wait_time.Value) / sum(Fields!wait_time.Value, "DM_OS_WAIT_STATS"), 2)</Value>
+                                      <Value>=FormatPercent(Sum(Fields!wait_time.Value) / sum(Fields!wait_time.Value, "dsWaits"), 2)</Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
+                                        <Format>0.0;(0.0)</Format>
                                       </Style>
                                     </TextRun>
                                   </TextRuns>
                                   <Style>
-                                    <TextAlign>Right</TextAlign>
+                                    <TextAlign>Center</TextAlign>
                                   </Style>
                                 </Paragraph>
                               </Paragraphs>
@@ -518,7 +603,7 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value />
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                       </Style>
                                     </TextRun>
@@ -548,7 +633,7 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value />
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                       </Style>
                                     </TextRun>
@@ -583,7 +668,7 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value />
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                       </Style>
                                     </TextRun>
@@ -613,7 +698,7 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value>Wait Type</Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                         <FontWeight>Bold</FontWeight>
                                       </Style>
@@ -626,9 +711,9 @@ where waiting_tasks_count &gt; 0</CommandText>
                               <ZIndex>12</ZIndex>
                               <Style>
                                 <Border>
-                                  <Style>Solid</Style>
+                                  <Style>None</Style>
                                 </Border>
-                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <BackgroundColor>WhiteSmoke</BackgroundColor>
                                 <PaddingLeft>2pt</PaddingLeft>
                                 <PaddingRight>2pt</PaddingRight>
                                 <PaddingTop>2pt</PaddingTop>
@@ -646,16 +731,16 @@ where waiting_tasks_count &gt; 0</CommandText>
                                 <Paragraph>
                                   <TextRuns>
                                     <TextRun>
-                                      <Value>Number of Waits</Value>
+                                      <Value>Waits</Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                         <FontWeight>Bold</FontWeight>
                                       </Style>
                                     </TextRun>
                                   </TextRuns>
                                   <Style>
-                                    <TextAlign>Left</TextAlign>
+                                    <TextAlign>Center</TextAlign>
                                   </Style>
                                 </Paragraph>
                               </Paragraphs>
@@ -663,9 +748,9 @@ where waiting_tasks_count &gt; 0</CommandText>
                               <ZIndex>11</ZIndex>
                               <Style>
                                 <Border>
-                                  <Style>Solid</Style>
+                                  <Style>None</Style>
                                 </Border>
-                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <BackgroundColor>WhiteSmoke</BackgroundColor>
                                 <PaddingLeft>2pt</PaddingLeft>
                                 <PaddingRight>2pt</PaddingRight>
                                 <PaddingTop>2pt</PaddingTop>
@@ -683,16 +768,31 @@ where waiting_tasks_count &gt; 0</CommandText>
                                 <Paragraph>
                                   <TextRuns>
                                     <TextRun>
-                                      <Value>Wait Time (sec)</Value>
+                                      <Value>Wait Time </Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                         <FontWeight>Bold</FontWeight>
                                       </Style>
                                     </TextRun>
                                   </TextRuns>
                                   <Style>
-                                    <TextAlign>Left</TextAlign>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>(sec)</Value>
+                                      <Style>
+                                        <FontFamily>Segoe UI</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
                                   </Style>
                                 </Paragraph>
                               </Paragraphs>
@@ -700,9 +800,9 @@ where waiting_tasks_count &gt; 0</CommandText>
                               <ZIndex>10</ZIndex>
                               <Style>
                                 <Border>
-                                  <Style>Solid</Style>
+                                  <Style>None</Style>
                                 </Border>
-                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <BackgroundColor>WhiteSmoke</BackgroundColor>
                                 <PaddingLeft>2pt</PaddingLeft>
                                 <PaddingRight>2pt</PaddingRight>
                                 <PaddingTop>2pt</PaddingTop>
@@ -722,23 +822,23 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value>% Wait time</Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                         <FontWeight>Bold</FontWeight>
                                       </Style>
                                     </TextRun>
                                   </TextRuns>
                                   <Style>
-                                    <TextAlign>Left</TextAlign>
+                                    <TextAlign>Center</TextAlign>
                                   </Style>
                                 </Paragraph>
                               </Paragraphs>
                               <ZIndex>9</ZIndex>
                               <Style>
                                 <Border>
-                                  <Style>Solid</Style>
+                                  <Style>None</Style>
                                 </Border>
-                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <BackgroundColor>WhiteSmoke</BackgroundColor>
                                 <PaddingLeft>2pt</PaddingLeft>
                                 <PaddingRight>2pt</PaddingRight>
                                 <PaddingTop>2pt</PaddingTop>
@@ -756,23 +856,40 @@ where waiting_tasks_count &gt; 0</CommandText>
                                 <Paragraph>
                                   <TextRuns>
                                     <TextRun>
-                                      <Value>Max Wait Time (ms)</Value>
+                                      <Value>Max </Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                         <FontWeight>Bold</FontWeight>
                                       </Style>
                                     </TextRun>
                                   </TextRuns>
-                                  <Style />
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>Wait Time (ms)</Value>
+                                      <Style>
+                                        <FontFamily>Segoe UI</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
                                 </Paragraph>
                               </Paragraphs>
                               <ZIndex>8</ZIndex>
                               <Style>
                                 <Border>
-                                  <Style>Solid</Style>
+                                  <Style>None</Style>
                                 </Border>
-                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <BackgroundColor>WhiteSmoke</BackgroundColor>
                                 <PaddingLeft>2pt</PaddingLeft>
                                 <PaddingRight>2pt</PaddingRight>
                                 <PaddingTop>2pt</PaddingTop>
@@ -790,23 +907,40 @@ where waiting_tasks_count &gt; 0</CommandText>
                                 <Paragraph>
                                   <TextRuns>
                                     <TextRun>
-                                      <Value>Avg Wait Time (ms)</Value>
+                                      <Value>Avg </Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                         <FontWeight>Bold</FontWeight>
                                       </Style>
                                     </TextRun>
                                   </TextRuns>
-                                  <Style />
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>Wait Time (ms)</Value>
+                                      <Style>
+                                        <FontFamily>Segoe UI</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
                                 </Paragraph>
                               </Paragraphs>
                               <ZIndex>7</ZIndex>
                               <Style>
                                 <Border>
-                                  <Style>Solid</Style>
+                                  <Style>None</Style>
                                 </Border>
-                                <BackgroundColor>Gainsboro</BackgroundColor>
+                                <BackgroundColor>WhiteSmoke</BackgroundColor>
                                 <PaddingLeft>2pt</PaddingLeft>
                                 <PaddingRight>2pt</PaddingRight>
                                 <PaddingTop>2pt</PaddingTop>
@@ -831,7 +965,7 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value />
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                       </Style>
                                     </TextRun>
@@ -864,7 +998,7 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value>=Fields!wait_type.Value</Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
                                       </Style>
                                     </TextRun>
@@ -879,6 +1013,10 @@ where waiting_tasks_count &gt; 0</CommandText>
                                   <Color>Gainsboro</Color>
                                   <Style>Solid</Style>
                                 </Border>
+                                <BackgroundColor>=Choose(Fields!n.Value,
+"#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd","#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf"
+,"#8dd3c7","#ffffb3","#bebada","#fb8072","#80b1d3","#fdb462","#b3de69","#fccde5","#d9d9d9","#bc80bd","#ccebc5","#ffed6f"
+)</BackgroundColor>
                                 <PaddingLeft>2pt</PaddingLeft>
                                 <PaddingRight>2pt</PaddingRight>
                                 <PaddingTop>2pt</PaddingTop>
@@ -898,12 +1036,15 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value>=Fields!num_waits.Value</Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
+                                        <Format>#,0;(#,0)</Format>
                                       </Style>
                                     </TextRun>
                                   </TextRuns>
-                                  <Style />
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
                                 </Paragraph>
                               </Paragraphs>
                               <rd:DefaultName>textbox22</rd:DefaultName>
@@ -932,12 +1073,15 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value>=Fields!wait_time.Value/1000</Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
+                                        <Format>#,0.0;(#,0.0)</Format>
                                       </Style>
                                     </TextRun>
                                   </TextRuns>
-                                  <Style />
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
                                 </Paragraph>
                               </Paragraphs>
                               <rd:DefaultName>textbox23</rd:DefaultName>
@@ -966,12 +1110,15 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value>=FormatPercent(IIf(sum(Fields!wait_time.Value, "table2_Group1") &gt; 0, Fields!wait_time.Value/sum(Fields!wait_time.Value, "table2_Group1"), 1), 2)</Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
+                                        <Format>0.0;(0.0)</Format>
                                       </Style>
                                     </TextRun>
                                   </TextRuns>
-                                  <Style />
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
                                 </Paragraph>
                               </Paragraphs>
                               <ZIndex>2</ZIndex>
@@ -999,12 +1146,15 @@ where waiting_tasks_count &gt; 0</CommandText>
                                     <TextRun>
                                       <Value>=Fields!max_wait_time_ms.Value</Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
+                                        <Format>#,0;(#,0)</Format>
                                       </Style>
                                     </TextRun>
                                   </TextRuns>
-                                  <Style />
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
                                 </Paragraph>
                               </Paragraphs>
                               <ZIndex>1</ZIndex>
@@ -1030,15 +1180,16 @@ where waiting_tasks_count &gt; 0</CommandText>
                                 <Paragraph>
                                   <TextRuns>
                                     <TextRun>
-                                      <Value>=FormatNumber(Fields!wait_time.Value/Fields!num_waits.Value, 1, true, false, false)</Value>
+                                      <Value>=Fields!wait_time.Value/Fields!num_waits.Value</Value>
                                       <Style>
-                                        <FontFamily>Tahoma</FontFamily>
+                                        <FontFamily>Segoe UI</FontFamily>
                                         <FontSize>8pt</FontSize>
+                                        <Format>#,0.0;(#,0.0)</Format>
                                       </Style>
                                     </TextRun>
                                   </TextRuns>
                                   <Style>
-                                    <TextAlign>Right</TextAlign>
+                                    <TextAlign>Center</TextAlign>
                                   </Style>
                                 </Paragraph>
                               </Paragraphs>
@@ -1127,53 +1278,15 @@ where waiting_tasks_count &gt; 0</CommandText>
                     </TablixMember>
                   </TablixMembers>
                 </TablixRowHierarchy>
-                <DataSetName>DM_OS_WAIT_STATS</DataSetName>
+                <DataSetName>dsWaits</DataSetName>
+                <Top>3.64931in</Top>
                 <Height>0.8in</Height>
-                <Width>9.125in</Width>
+                <Width>9.10417in</Width>
                 <Style>
-                  <FontFamily>Tahoma</FontFamily>
+                  <FontFamily>Segoe UI</FontFamily>
                 </Style>
               </Tablix>
-              <Textbox Name="textbox18">
-                <CanGrow>true</CanGrow>
-                <KeepTogether>true</KeepTogether>
-                <Paragraphs>
-                  <Paragraph>
-                    <TextRuns>
-                      <TextRun>
-                        <Value>Waits in the Sleep category are typically delays incurred by background tasks waiting for more work.  A high wait time in this category is usually not indicative of any performance problem.</Value>
-                        <Style>
-                          <FontFamily>Tahoma</FontFamily>
-                          <FontSize>8pt</FontSize>
-                        </Style>
-                      </TextRun>
-                    </TextRuns>
-                    <Style />
-                  </Paragraph>
-                </Paragraphs>
-                <rd:DefaultName>textbox18</rd:DefaultName>
-                <Top>0.875in</Top>
-                <Height>0.375in</Height>
-                <Width>6.875in</Width>
-                <ZIndex>1</ZIndex>
-                <Style>
-                  <PaddingLeft>2pt</PaddingLeft>
-                  <PaddingRight>2pt</PaddingRight>
-                  <PaddingTop>2pt</PaddingTop>
-                  <PaddingBottom>2pt</PaddingBottom>
-                </Style>
-              </Textbox>
-            </ReportItems>
-            <DataElementOutput>ContentsOnly</DataElementOutput>
-            <Top>3.52778in</Top>
-            <Left>0.125in</Left>
-            <Height>1.25in</Height>
-            <Width>9.25in</Width>
-            <Style />
-          </Rectangle>
-          <Rectangle Name="rectangle2">
-            <ReportItems>
-              <Chart Name="chart4">
+              <Chart Name="Chart1">
                 <ChartCategoryHierarchy>
                   <ChartMembers>
                     <ChartMember>
@@ -1211,16 +1324,20 @@ where waiting_tasks_count &gt; 0</CommandText>
                           <ChartDataLabel>
                             <Style>
                               <FontSize>8pt</FontSize>
+                              <Format>#,0.0;(#,0.0)</Format>
                             </Style>
-                            <Label>=sum(Fields!num_waits.Value) &amp; ChrW(13) &amp; ChrW(10) &amp; IIf(sum(Fields!num_waits.Value) = 1, "Wait", "Waits")</Label>
-                            <Rotation>-90</Rotation>
+                            <Label>=Sum(Fields!wait_time.Value)/1000</Label>
+                            <Visible>true</Visible>
                           </ChartDataLabel>
                           <ToolTip>=sum(Fields!num_waits.Value) &amp; ChrW(13) &amp; ChrW(10) &amp; IIf(sum(Fields!num_waits.Value) = 1, "Wait", "Waits")</ToolTip>
                           <Style>
                             <Border>
                               <Width>0.376pt</Width>
                             </Border>
-                            <Color>SteelBlue</Color>
+                            <Color>=Choose(Fields!n.Value,
+"#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd","#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf"
+,"#8dd3c7","#ffffb3","#bebada","#fb8072","#80b1d3","#fdb462","#b3de69","#fccde5","#d9d9d9","#bc80bd","#ccebc5","#ffed6f"
+)</Color>
                           </Style>
                           <ChartMarker>
                             <Size>6pt</Size>
@@ -1264,9 +1381,9 @@ where waiting_tasks_count &gt; 0</CommandText>
                           </Border>
                         </Style>
                         <ChartAxisTitle>
-                          <Caption>Wait Category</Caption>
+                          <Caption />
                           <Style>
-                            <FontFamily>Tahoma</FontFamily>
+                            <FontFamily>Segoe UI</FontFamily>
                             <FontWeight>Bold</FontWeight>
                           </Style>
                         </ChartAxisTitle>
@@ -1297,6 +1414,7 @@ where waiting_tasks_count &gt; 0</CommandText>
                           <Enabled>True</Enabled>
                           <Style>
                             <Border>
+                              <Color>Silver</Color>
                               <Style>Solid</Style>
                               <Width>0.75pt</Width>
                             </Border>
@@ -1308,8 +1426,6 @@ where waiting_tasks_count &gt; 0</CommandText>
                         </ChartMinorTickMarks>
                         <Minimum>NaN</Minimum>
                         <Maximum>NaN</Maximum>
-                        <PreventFontShrink>true</PreventFontShrink>
-                        <PreventFontGrow>true</PreventFontGrow>
                         <IncludeZero>false</IncludeZero>
                         <ChartAxisScaleBreak>
                           <Style />
@@ -1336,25 +1452,27 @@ where waiting_tasks_count &gt; 0</CommandText>
                     </ChartCategoryAxes>
                     <ChartValueAxes>
                       <ChartAxis Name="Primary">
+                        <Visible>False</Visible>
                         <Style>
                           <Border>
+                            <Color>Gainsboro</Color>
                             <Style>None</Style>
                             <Width>0.75pt</Width>
                           </Border>
                           <Format>n0</Format>
                         </Style>
                         <ChartAxisTitle>
-                          <Caption>Wait Time (sec)</Caption>
+                          <Caption />
                           <Style>
-                            <FontFamily>Tahoma</FontFamily>
+                            <FontFamily>Segoe UI</FontFamily>
                             <FontWeight>Bold</FontWeight>
                           </Style>
                         </ChartAxisTitle>
                         <Margin>True</Margin>
                         <ChartMajorGridLines>
-                          <Enabled>True</Enabled>
                           <Style>
                             <Border>
+                              <Color>Gainsboro</Color>
                               <Style>Solid</Style>
                               <Width>0.75pt</Width>
                             </Border>
@@ -1375,6 +1493,7 @@ where waiting_tasks_count &gt; 0</CommandText>
                           <Enabled>True</Enabled>
                           <Style>
                             <Border>
+                              <Color>Silver</Color>
                               <Style>Solid</Style>
                               <Width>0.75pt</Width>
                             </Border>
@@ -1420,21 +1539,21 @@ where waiting_tasks_count &gt; 0</CommandText>
                     </ChartThreeDProperties>
                     <Style>
                       <Border>
-                        <Style>Solid</Style>
                         <Width>0.75pt</Width>
                       </Border>
-                      <BackgroundColor>LightGrey</BackgroundColor>
+                      <BackgroundColor>WhiteSmoke</BackgroundColor>
                     </Style>
                   </ChartArea>
                 </ChartAreas>
                 <ChartTitles>
                   <ChartTitle Name="Default">
-                    <Caption>Cumulative Wait Time By Wait Category</Caption>
+                    <Caption>Total Wait Time (sec)</Caption>
                     <Style>
-                      <FontFamily>Tahoma</FontFamily>
+                      <FontFamily>Segoe UI</FontFamily>
                       <FontSize>12pt</FontSize>
                       <FontWeight>Bold</FontWeight>
                     </Style>
+                    <Position>TopLeft</Position>
                   </ChartTitle>
                 </ChartTitles>
                 <ChartBorderSkin>
@@ -1452,9 +1571,10 @@ where waiting_tasks_count &gt; 0</CommandText>
                     <VerticalAlign>Top</VerticalAlign>
                   </Style>
                 </ChartNoDataMessage>
-                <DataSetName>DM_OS_WAIT_STATS</DataSetName>
-                <Height>3in</Height>
-                <Width>9.125in</Width>
+                <DataSetName>dsWaits</DataSetName>
+                <Height>3.28125in</Height>
+                <Width>9.22792in</Width>
+                <ZIndex>1</ZIndex>
                 <CustomProperties>
                   <CustomProperty>
                     <Name>__Upgraded2005__</Name>
@@ -1462,58 +1582,612 @@ where waiting_tasks_count &gt; 0</CommandText>
                   </CustomProperty>
                 </CustomProperties>
                 <Style>
-                  <BackgroundColor>White</BackgroundColor>
+                  <Border>
+                    <Color>LightGrey</Color>
+                    <Style>Solid</Style>
+                  </Border>
                 </Style>
               </Chart>
+              <Textbox Name="Textbox1">
+                <CanGrow>true</CanGrow>
+                <KeepTogether>true</KeepTogether>
+                <Paragraphs>
+                  <Paragraph>
+                    <TextRuns>
+                      <TextRun>
+                        <Value>Details :</Value>
+                        <Style>
+                          <FontFamily>Segoe UI</FontFamily>
+                          <FontSize>12pt</FontSize>
+                          <FontWeight>Bold</FontWeight>
+                        </Style>
+                      </TextRun>
+                    </TextRuns>
+                    <Style />
+                  </Paragraph>
+                </Paragraphs>
+                <rd:DefaultName>Textbox1</rd:DefaultName>
+                <Top>3.35069in</Top>
+                <Height>0.25in</Height>
+                <Width>1in</Width>
+                <ZIndex>2</ZIndex>
+                <Style>
+                  <Border>
+                    <Style>None</Style>
+                  </Border>
+                  <PaddingLeft>2pt</PaddingLeft>
+                  <PaddingRight>2pt</PaddingRight>
+                  <PaddingTop>2pt</PaddingTop>
+                  <PaddingBottom>2pt</PaddingBottom>
+                </Style>
+              </Textbox>
             </ReportItems>
             <DataElementOutput>ContentsOnly</DataElementOutput>
-            <Top>0.40278in</Top>
-            <Left>0.125in</Left>
-            <Height>3in</Height>
-            <Width>9.125in</Width>
-            <ZIndex>1</ZIndex>
-            <Visibility>
-              <Hidden>=IIf(Count(Fields!wait_type.Value, "DM_OS_WAIT_STATS") = 0, true, false)</Hidden>
-            </Visibility>
+            <Top>0.06458in</Top>
+            <Left>0.22917in</Left>
+            <Height>4.48056in</Height>
+            <Width>9.22792in</Width>
             <Style />
           </Rectangle>
-          <Textbox Name="textbox3">
-            <CanGrow>true</CanGrow>
-            <KeepTogether>true</KeepTogether>
-            <Paragraphs>
-              <Paragraph>
-                <TextRuns>
-                  <TextRun>
-                    <Value>Historical Waits</Value>
-                    <Style>
-                      <FontFamily>Tahoma</FontFamily>
-                      <FontSize>16pt</FontSize>
-                    </Style>
-                  </TextRun>
-                </TextRuns>
+          <Rectangle Name="Rectangle2">
+            <ReportItems>
+              <Tablix Name="Tablix1">
+                <TablixBody>
+                  <TablixColumns>
+                    <TablixColumn>
+                      <Width>1.65528in</Width>
+                    </TablixColumn>
+                    <TablixColumn>
+                      <Width>0.50347in</Width>
+                    </TablixColumn>
+                    <TablixColumn>
+                      <Width>1.59945in</Width>
+                    </TablixColumn>
+                    <TablixColumn>
+                      <Width>1.55208in</Width>
+                    </TablixColumn>
+                    <TablixColumn>
+                      <Width>1.35167in</Width>
+                    </TablixColumn>
+                    <TablixColumn>
+                      <Width>2.56597in</Width>
+                    </TablixColumn>
+                  </TablixColumns>
+                  <TablixRows>
+                    <TablixRow>
+                      <Height>0.20833in</Height>
+                      <TablixCells>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="Textbox3">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>Start Time</Value>
+                                      <Style>
+                                        <FontFamily>Segoe UI</FontFamily>
+                                        <FontSize>9pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>Textbox3</rd:DefaultName>
+                              <Style>
+                                <Border>
+                                  <Color>LightGrey</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <BackgroundColor>WhiteSmoke</BackgroundColor>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="Textbox40">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>SPID</Value>
+                                      <Style>
+                                        <FontFamily>Segoe UI</FontFamily>
+                                        <FontSize>9pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>Textbox40</rd:DefaultName>
+                              <Style>
+                                <Border>
+                                  <Color>LightGrey</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <BackgroundColor>WhiteSmoke</BackgroundColor>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="Textbox18">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>Login</Value>
+                                      <Style>
+                                        <FontFamily>Segoe UI</FontFamily>
+                                        <FontSize>9pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>Textbox18</rd:DefaultName>
+                              <Style>
+                                <Border>
+                                  <Color>LightGrey</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <BackgroundColor>WhiteSmoke</BackgroundColor>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="Textbox28">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>Application</Value>
+                                      <Style>
+                                        <FontFamily>Segoe UI</FontFamily>
+                                        <FontSize>9pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>Textbox28</rd:DefaultName>
+                              <Style>
+                                <Border>
+                                  <Color>LightGrey</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <BackgroundColor>WhiteSmoke</BackgroundColor>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="Textbox25">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>Hostname</Value>
+                                      <Style>
+                                        <FontFamily>Segoe UI</FontFamily>
+                                        <FontSize>9pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>Textbox25</rd:DefaultName>
+                              <Style>
+                                <Border>
+                                  <Color>LightGrey</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <BackgroundColor>WhiteSmoke</BackgroundColor>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="Textbox33">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>Command</Value>
+                                      <Style>
+                                        <FontFamily>Segoe UI</FontFamily>
+                                        <FontSize>9pt</FontSize>
+                                        <FontWeight>Bold</FontWeight>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>Textbox33</rd:DefaultName>
+                              <Style>
+                                <Border>
+                                  <Color>LightGrey</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <BackgroundColor>WhiteSmoke</BackgroundColor>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                      </TablixCells>
+                    </TablixRow>
+                    <TablixRow>
+                      <Height>0.21875in</Height>
+                      <TablixCells>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="StartTime">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>=Fields!StartTime.Value</Value>
+                                      <Style>
+                                        <FontFamily>Segoe UI</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                        <Format>dd MMM yyyy HH:mm, dddd</Format>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>StartTime</rd:DefaultName>
+                              <Style>
+                                <Border>
+                                  <Color>LightGrey</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <VerticalAlign>Middle</VerticalAlign>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="SPID">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>=Fields!SPID.Value</Value>
+                                      <Style>
+                                        <FontFamily>Segoe UI</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>SPID</rd:DefaultName>
+                              <ToolTip>="ProcessID: "+cstr(Fields!ClientProcessID.Value)</ToolTip>
+                              <Style>
+                                <Border>
+                                  <Color>LightGrey</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <VerticalAlign>Middle</VerticalAlign>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="LoginName">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>=Fields!LoginName.Value</Value>
+                                      <Style>
+                                        <FontFamily>Segoe UI</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>LoginName</rd:DefaultName>
+                              <Style>
+                                <Border>
+                                  <Color>LightGrey</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <VerticalAlign>Middle</VerticalAlign>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="ApplicationName">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>=Fields!ApplicationName.Value</Value>
+                                      <Style>
+                                        <FontFamily>Segoe UI</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>ApplicationName</rd:DefaultName>
+                              <Style>
+                                <Border>
+                                  <Color>LightGrey</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <VerticalAlign>Middle</VerticalAlign>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="Hostname">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>=Fields!Hostname.Value</Value>
+                                      <Style>
+                                        <FontFamily>Segoe UI</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style>
+                                    <TextAlign>Center</TextAlign>
+                                  </Style>
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>Hostname</rd:DefaultName>
+                              <Style>
+                                <Border>
+                                  <Color>LightGrey</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <VerticalAlign>Middle</VerticalAlign>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                        <TablixCell>
+                          <CellContents>
+                            <Textbox Name="TextData">
+                              <CanGrow>true</CanGrow>
+                              <KeepTogether>true</KeepTogether>
+                              <Paragraphs>
+                                <Paragraph>
+                                  <TextRuns>
+                                    <TextRun>
+                                      <Value>=Fields!TextData.Value</Value>
+                                      <Style>
+                                        <FontFamily>Segoe UI</FontFamily>
+                                        <FontSize>8pt</FontSize>
+                                      </Style>
+                                    </TextRun>
+                                  </TextRuns>
+                                  <Style />
+                                </Paragraph>
+                              </Paragraphs>
+                              <rd:DefaultName>TextData</rd:DefaultName>
+                              <Style>
+                                <Border>
+                                  <Color>LightGrey</Color>
+                                  <Style>Solid</Style>
+                                </Border>
+                                <VerticalAlign>Middle</VerticalAlign>
+                                <PaddingLeft>2pt</PaddingLeft>
+                                <PaddingRight>2pt</PaddingRight>
+                                <PaddingTop>2pt</PaddingTop>
+                                <PaddingBottom>2pt</PaddingBottom>
+                              </Style>
+                            </Textbox>
+                          </CellContents>
+                        </TablixCell>
+                      </TablixCells>
+                    </TablixRow>
+                  </TablixRows>
+                </TablixBody>
+                <TablixColumnHierarchy>
+                  <TablixMembers>
+                    <TablixMember />
+                    <TablixMember />
+                    <TablixMember />
+                    <TablixMember />
+                    <TablixMember />
+                    <TablixMember />
+                  </TablixMembers>
+                </TablixColumnHierarchy>
+                <TablixRowHierarchy>
+                  <TablixMembers>
+                    <TablixMember>
+                      <KeepWithGroup>After</KeepWithGroup>
+                    </TablixMember>
+                    <TablixMember>
+                      <Group Name="Details" />
+                    </TablixMember>
+                  </TablixMembers>
+                </TablixRowHierarchy>
+                <DataSetName>dsLastReset</DataSetName>
+                <Top>0.35417in</Top>
+                <Height>0.42708in</Height>
+                <Width>9.22792in</Width>
                 <Style>
-                  <TextAlign>Center</TextAlign>
+                  <Border>
+                    <Style>None</Style>
+                  </Border>
                 </Style>
-              </Paragraph>
-            </Paragraphs>
-            <rd:DefaultName>textbox3</rd:DefaultName>
-            <Top>0.01389in</Top>
-            <Left>3.375in</Left>
-            <Height>0.375in</Height>
-            <Width>2.625in</Width>
-            <ZIndex>2</ZIndex>
+              </Tablix>
+              <Textbox Name="Textbox27">
+                <CanGrow>true</CanGrow>
+                <KeepTogether>true</KeepTogether>
+                <Paragraphs>
+                  <Paragraph>
+                    <TextRuns>
+                      <TextRun>
+                        <Value>Wait statistics was reset last time:</Value>
+                        <Style>
+                          <FontFamily>Segoe UI</FontFamily>
+                          <FontWeight>Bold</FontWeight>
+                          <Color>Tomato</Color>
+                        </Style>
+                      </TextRun>
+                    </TextRuns>
+                    <Style />
+                  </Paragraph>
+                </Paragraphs>
+                <rd:DefaultName>Textbox27</rd:DefaultName>
+                <Top>0.04861in</Top>
+                <Height>0.25in</Height>
+                <Width>3.22917in</Width>
+                <ZIndex>1</ZIndex>
+                <Style>
+                  <Border>
+                    <Style>None</Style>
+                  </Border>
+                  <PaddingLeft>2pt</PaddingLeft>
+                  <PaddingRight>2pt</PaddingRight>
+                  <PaddingTop>2pt</PaddingTop>
+                  <PaddingBottom>2pt</PaddingBottom>
+                </Style>
+              </Textbox>
+            </ReportItems>
+            <KeepTogether>true</KeepTogether>
+            <Top>4.61111in</Top>
+            <Left>0.22917in</Left>
+            <Height>0.83333in</Height>
+            <Width>9.22792in</Width>
+            <ZIndex>1</ZIndex>
+            <Visibility>
+              <Hidden>=iif(CountRows("dsLastReset")=0,true,false)</Hidden>
+            </Visibility>
             <Style>
-              <PaddingLeft>2pt</PaddingLeft>
-              <PaddingRight>2pt</PaddingRight>
-              <PaddingTop>2pt</PaddingTop>
-              <PaddingBottom>2pt</PaddingBottom>
+              <Border>
+                <Style>None</Style>
+              </Border>
             </Style>
-          </Textbox>
+          </Rectangle>
         </ReportItems>
-        <Height>4.77778in</Height>
+        <Height>5.63195in</Height>
         <Style />
       </Body>
-      <Width>9.5in</Width>
+      <Width>9.80208in</Width>
       <Page>
         <PageHeader>
           <Height>0.54042in</Height>
@@ -1529,7 +2203,7 @@ where waiting_tasks_count &gt; 0</CommandText>
                     <TextRun>
                       <Value>="Report Time: " &amp; Globals!ExecutionTime</Value>
                       <Style>
-                        <FontFamily>Tahoma</FontFamily>
+                        <FontFamily>Segoe UI</FontFamily>
                         <FontSize>8pt</FontSize>
                       </Style>
                     </TextRun>
@@ -1653,49 +2327,6 @@ where waiting_tasks_count &gt; 0</CommandText>
             <BackgroundColor>WhiteSmoke</BackgroundColor>
           </Style>
         </PageHeader>
-        <PageFooter>
-          <Height>0.25in</Height>
-          <PrintOnFirstPage>true</PrintOnFirstPage>
-          <PrintOnLastPage>true</PrintOnLastPage>
-          <ReportItems>
-            <Textbox Name="textbox24">
-              <CanGrow>true</CanGrow>
-              <KeepTogether>true</KeepTogether>
-              <Paragraphs>
-                <Paragraph>
-                  <TextRuns>
-                    <TextRun>
-                      <Value>© 2006-2007 Microsoft Corporation. All rights reserved.</Value>
-                      <Style>
-                        <FontFamily>Tahoma</FontFamily>
-                        <FontSize>8pt</FontSize>
-                        <Color>Gray</Color>
-                      </Style>
-                    </TextRun>
-                  </TextRuns>
-                  <Style />
-                </Paragraph>
-              </Paragraphs>
-              <rd:DefaultName>textbox24</rd:DefaultName>
-              <Left>0.125in</Left>
-              <Height>0.25in</Height>
-              <Width>4.125in</Width>
-              <Visibility>
-                <Hidden>true</Hidden>
-              </Visibility>
-              <Style>
-                <Border>
-                  <Style>None</Style>
-                </Border>
-                <PaddingLeft>2pt</PaddingLeft>
-                <PaddingRight>2pt</PaddingRight>
-                <PaddingTop>2pt</PaddingTop>
-                <PaddingBottom>2pt</PaddingBottom>
-              </Style>
-            </Textbox>
-          </ReportItems>
-          <Style />
-        </PageFooter>
         <InteractiveHeight>0in</InteractiveHeight>
         <LeftMargin>1in</LeftMargin>
         <RightMargin>1in</RightMargin>
@@ -1710,7 +2341,7 @@ where waiting_tasks_count &gt; 0</CommandText>
       <DataType>String</DataType>
       <DefaultValue>
         <Values>
-          <Value>localhost\sql17</Value>
+          <Value>.\x1</Value>
         </Values>
       </DefaultValue>
       <Prompt>SQLServer</Prompt>

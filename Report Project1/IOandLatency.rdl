@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner">
-  <AutoRefresh>0</AutoRefresh>
+  <AutoRefresh>15</AutoRefresh>
   <DataSources>
     <DataSource Name="DataSource1">
       <ConnectionProperties>
         <DataProvider>SQL</DataProvider>
-        <ConnectString>="Data Source="&amp;Parameters!SQLServer.Value</ConnectString>
+        <ConnectString>="Data Source="&amp;Parameters!SQLServer.Value+";Application Name=Report:"+Globals!ReportName</ConnectString>
         <IntegratedSecurity>true</IntegratedSecurity>
       </ConnectionProperties>
       <rd:SecurityType>Integrated</rd:SecurityType>
@@ -1417,7 +1417,7 @@ exec (@cmd)</CommandText>
                 <Paragraph>
                   <TextRuns>
                     <TextRun>
-                      <Value>Real-time Disk's Workload &amp; Lantency</Value>
+                      <Value>Real-time Disk's Workload &amp; Latency</Value>
                       <Style>
                         <FontSize>12pt</FontSize>
                         <FontWeight>Bold</FontWeight>

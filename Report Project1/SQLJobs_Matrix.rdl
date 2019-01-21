@@ -23,8 +23,8 @@
           </QueryParameter>
         </QueryParameters>
         <CommandText>/*
-Note: Query skips negative durations !
-*/
+--Note: Query skips negative durations !
+-- old version
 
 set nocount on
 set ansi_warnings off 
@@ -299,6 +299,289 @@ from @matrix m
 join more_details md on m.job_id=md.job_id
 join termin t on m.job_id=t.job_id
 right join msdb.dbo.sysjobs j on m.name=j.name 
+order by j.name
+
+option (recompile, maxdop 1)
+*/
+
+-- new version
+/*
+Note: Query skips negative durations !
+*/
+
+set nocount on
+set ansi_warnings off 
+declare @job nvarchar(256) 
+declare @jobs table (name nvarchar(256))
+declare @matrix table 
+(i int identity,job_id uniqueidentifier,
+[00:00] varchar(5),[00:30] varchar(5),[01:00] varchar(5),[01:30] varchar(5),[02:00] varchar(5),[02:30] varchar(5),[03:00] varchar(5),[03:30] varchar(5),[04:00] varchar(5),[04:30] varchar(5)
+,[05:00] varchar(5),[05:30] varchar(5),[06:00] varchar(5),[06:30] varchar(5),[07:00] varchar(5),[07:30] varchar(5),[08:00] varchar(5),[08:30] varchar(5),[09:00] varchar(5),[09:30] varchar(5)
+,[10:00] varchar(5),[10:30] varchar(5),[11:00] varchar(5),[11:30] varchar(5),[12:00] varchar(5),[12:30] varchar(5),[13:00] varchar(5),[13:30] varchar(5),[14:00] varchar(5),[14:30] varchar(5)
+,[15:00] varchar(5),[15:30] varchar(5),[16:00] varchar(5),[16:30] varchar(5),[17:00] varchar(5),[17:30] varchar(5),[18:00] varchar(5),[18:30] varchar(5),[19:00] varchar(5),[19:30] varchar(5)
+,[20:00] varchar(5),[20:30] varchar(5),[21:00] varchar(5),[21:30] varchar(5),[22:00] varchar(5),[22:30] varchar(5),[23:00] varchar(5),[23:30] varchar(5)
+)
+/*test*/
+/* -- comment it 
+declare @DT int
+select @DT=datediff(dd,'20100101','20181028')
+*/
+
+--insert into @jobs (name)
+--select name from msdb.dbo.sysjobs
+----where name='job.RebuildALL_Index'  -- comment it
+
+--while exists (select top 1 1 from @jobs)
+--	begin
+--		select top 1 @job=name from @jobs
+ 
+--		print 'Processing : '+@job
+
+		;with 
+			n as      /*49 records*/
+					(select 1 [n] union all select 2 union all select 3 union all select 4 union all select 5 union all select 6 union all select 7),
+			nn as     /*incremental integers from 1 to 49 to generate 30 min intervals (48+1)*/
+					(select top 49 ROW_NUMBER() over (order by newid()) [i]
+							from n n1 
+							join n n2 on 1=1
+							--join n n3 on 1=1 
+							--join n n4 on 1=1
+							)
+			,dates as  /*set of 30min intervals*/
+				(select 
+					dateadd(mi,30*(i-1),
+						dateadd(dd,cast(@DT as int)/*datediff(dd,'20100101',@DT)*/
+						,'20100101')) [period]
+				from nn)
+--	select * from dates 
+			,jobs as   /*list of jobs*/
+				(select 
+					jh.instance_id [run]
+					,sj.job_id -- added
+				   ,sj.name
+				   ,CAST(STR(jh.run_date, 8, 0) AS DATETIME) 
+						+CAST(STUFF(STUFF(REPLACE(STR(jh.run_time, 6), ' ', '0'), 3, 0, ':'), 6, 0, ':') AS DATETIME)  [start]
+
+				   ,dateadd(ss
+						,convert(int,right('000000'+convert(varchar(20),jh.run_duration),2))
+							+convert(int,right(left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-2),2))*60
+							+convert(int,left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-4))*3600
+						,CAST(STR(jh.run_date, 8, 0) AS DATETIME) +CAST(STUFF(STUFF(REPLACE(STR(jh.run_time, 6), ' ', '0'), 3, 0, ':'), 6, 0, ':') AS DATETIME)) [end]
+				--,run_date
+				from msdb..sysjobhistory jh
+				join msdb..sysjobs sj on jh.job_id=sj.job_id
+				where 1=1
+				--sj.name=@job
+				and (
+					jh.run_date=convert(int,convert(varchar(20),dateadd(dd,cast(@DT as int),'20100101'),112))
+					
+					or /*added for cases when job is running overnight*/
+
+					dateadd(ss
+						,convert(int,right('000000'+convert(varchar(20),jh.run_duration),2))
+							+convert(int,right(left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-2),2))*60
+							+convert(int,left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-4))*3600
+						,CAST(STR(jh.run_date, 8, 0) AS DATETIME) +CAST(STUFF(STUFF(REPLACE(STR(jh.run_time, 6), ' ', '0'), 3, 0, ':'), 6, 0, ':') AS DATETIME))
+						
+						&gt; dateadd(dd,cast(@DT as int),'20100101')
+					)
+				and jh.step_id=0 /*exec status of a whole job*/
+				and jh.run_duration&gt;=0  /*negative durations are ignored (possible cause: restart of the server, daylight saving time change)*/
+		)
+--select * from jobs 
+		,new as (select 
+				run
+			   ,j.name
+			   ,j.job_id
+			   ,isnull(max(d1.period),(select min(period) from dates)) [start]
+			   ,isnull(min(d2.period),(select max(period) from dates)) [finish]
+		from jobs j
+		left join dates d1 on j.start&gt;=d1.period
+		left join dates d2 on  j.[end]&lt;d2.period  /* */
+		group by j.run,j.name,j.job_id
+		)
+--select * from new
+		,new_all as (
+		select n.name
+			,left(convert(varchar(20),d.period,108),5) [dt]
+			,n.job_id
+		from new n
+		join dates d on d.period&gt;=n.start and d.period&lt;n.finish)
+--select * from new_all
+
+		insert into @matrix
+		([job_id],[00:00],[00:30],[01:00],[01:30],[02:00],[02:30],[03:00],[03:30],[04:00],[04:30],[05:00],[05:30],[06:00],[06:30],[07:00],[07:30],[08:00],[08:30],[09:00],[09:30],[10:00],[10:30],[11:00],[11:30],[12:00],[12:30],[13:00],[13:30],[14:00],[14:30],[15:00],[15:30],[16:00],[16:30],[17:00],[17:30],[18:00],[18:30],[19:00],[19:30],[20:00],[20:30],[21:00],[21:30],[22:00],[22:30],[23:00],[23:30])
+		select 
+			[job_id]
+			,[00:00],[00:30],[01:00],[01:30],[02:00],[02:30],[03:00],[03:30],[04:00],[04:30],[05:00],[05:30],[06:00],[06:30],[07:00],[07:30],[08:00],[08:30],[09:00],[09:30],[10:00],[10:30],[11:00],[11:30],[12:00],[12:30],[13:00],[13:30],[14:00],[14:30],[15:00],[15:30],[16:00],[16:30],[17:00],[17:30],[18:00],[18:30],[19:00],[19:30],[20:00],[20:30],[21:00],[21:30],[22:00],[22:30],[23:00],[23:30]
+		from new_all 
+		pivot 
+		(count(name)  for dt in ([00:00],[00:30],[01:00],[01:30],[02:00],[02:30],[03:00],[03:30],[04:00],[04:30],[05:00],[05:30],[06:00],[06:30],[07:00],[07:30],[08:00],[08:30],[09:00],[09:30],[10:00],[10:30],[11:00],[11:30],[12:00],[12:30],[13:00],[13:30],[14:00],[14:30],[15:00],[15:30],[16:00],[16:30],[17:00],[17:30],[18:00],[18:30],[19:00],[19:30],[20:00],[20:30],[21:00],[21:30],[22:00],[22:30],[23:00],[23:30]) ) as p
+		/**/
+		option (recompile,maxdop 1)
+
+		--print 'Current job: '+ @job
+
+	--	delete @jobs where name=@job
+	--end
+--select * from @matrix
+
+;with more_details as
+	(select 
+			m.job_id
+			,sum(case when jh.run_status=1 then 1 else 0 end) [Success]
+			,sum(case when jh.run_status&lt;&gt;1 then 1 else 0 end) [Failed]
+			,avg(
+				convert(int,right('000000'+convert(varchar(20),jh.run_duration),2))
+							+convert(int,right(left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-2),2))*60
+							+convert(int,left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-4))*3600
+						
+				) [avg_ss]
+			,max(
+				convert(int,right('000000'+convert(varchar(20),jh.run_duration),2))
+							+convert(int,right(left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-2),2))*60
+							+convert(int,left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-4))*3600
+							
+			   ) [max_ss]
+			,min(
+				convert(int,right('000000'+convert(varchar(20),jh.run_duration),2))
+							+convert(int,right(left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-2),2))*60
+							+convert(int,left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-4))*3600
+							
+				) [min_ss]
+	from @matrix m 
+		join msdb.dbo.sysjobhistory jh on m.job_id=jh.job_id
+		where 
+		(	(  /*finish time of a job */
+				dateadd(ss
+						,convert(int,right('000000'+convert(varchar(20),jh.run_duration),2))
+							+convert(int,right(left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-2),2))*60
+							+convert(int,left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-4))*3600
+						,CAST(STR(jh.run_date, 8, 0) AS DATETIME) +CAST(STUFF(STUFF(REPLACE(STR(jh.run_time, 6), ' ', '0'), 3, 0, ':'), 6, 0, ':') AS DATETIME)
+						) &gt;= dateadd(dd,cast(@DT as int),'20100101')
+			 and
+				dateadd(ss
+						,convert(int,right('000000'+convert(varchar(20),jh.run_duration),2))
+							+convert(int,right(left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-2),2))*60
+							+convert(int,left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-4))*3600
+						,CAST(STR(jh.run_date, 8, 0) AS DATETIME) +CAST(STUFF(STUFF(REPLACE(STR(jh.run_time, 6), ' ', '0'), 3, 0, ':'), 6, 0, ':') AS DATETIME)
+						) &lt;  dateadd(dd,cast(@DT as int)+1,'20100101')
+			)
+
+			/*added for jobs running longer than 24hrs*/
+			OR
+
+			(
+			 /*start date of job execution*/
+				CAST(STR(jh.run_date, 8, 0) AS DATETIME) /*+CAST(STUFF(STUFF(REPLACE(STR(jh.run_time, 6), ' ', '0'), 3, 0, ':'), 6, 0, ':') AS DATETIME)*/
+					&lt;=dateadd(dd,cast(@DT as int),'20100101')
+			and
+			 /*end of job execution*/
+				dateadd(ss
+						,convert(int,right('000000'+convert(varchar(20),jh.run_duration),2))
+							+convert(int,right(left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-2),2))*60
+							+convert(int,left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-4))*3600
+						,CAST(STR(jh.run_date, 8, 0) AS DATETIME) +CAST(STUFF(STUFF(REPLACE(STR(jh.run_time, 6), ' ', '0'), 3, 0, ':'), 6, 0, ':') AS DATETIME)
+						)
+					&gt;=dateadd(dd,cast(@DT as int)+1,'20100101')
+			)
+		)
+			and 
+			jh.step_id=0 /*exec status of a whole job*/
+			and jh.run_duration&gt;=0  /*negative durations are ignored (possible cause: restart of the server, daylight saving time change)*/
+		group by m.job_id
+	)
+--select * from more_details
+,
+termin as  /* to check whether job has come from yesterday and/or goes overnight or NOT*/
+(select  
+		job_id
+		,sum(case 
+			when 
+			CAST(STR(jh.run_date, 8, 0) AS DATETIME) 
+					+CAST(STUFF(STUFF(REPLACE(STR(jh.run_time, 6), ' ', '0'), 3, 0, ':'), 6, 0, ':') AS DATETIME)&lt;dateadd(dd,cast(@DT as int),'20100101') then 1 else 0 
+		end) [from_yesterday]
+
+		,sum(case 
+			when 
+			dateadd(ss
+						,convert(int,right('000000'+convert(varchar(20),jh.run_duration),2))
+							+convert(int,right(left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-2),2))*60
+							+convert(int,left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-4))*3600
+						,CAST(STR(jh.run_date, 8, 0) AS DATETIME) +CAST(STUFF(STUFF(REPLACE(STR(jh.run_time, 6), ' ', '0'), 3, 0, ':'), 6, 0, ':') AS DATETIME)) &gt; dateadd(dd,cast(@DT as int)+1,'20100101') then 1 else 0 
+		end) [to_tomorrow]
+
+from msdb.dbo.sysjobhistory jh
+where 
+	(( /*End date*/
+	dateadd(ss
+						,convert(int,right('000000'+convert(varchar(20),jh.run_duration),2))
+							+convert(int,right(left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-2),2))*60
+							+convert(int,left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-4))*3600
+						,CAST(STR(jh.run_date, 8, 0) AS DATETIME) +CAST(STUFF(STUFF(REPLACE(STR(jh.run_time, 6), ' ', '0'), 3, 0, ':'), 6, 0, ':') AS DATETIME))
+		&gt;= dateadd(dd,cast(@DT as int),'20100101')
+		and  
+	dateadd(ss
+						,convert(int,right('000000'+convert(varchar(20),jh.run_duration),2))
+							+convert(int,right(left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-2),2))*60
+							+convert(int,left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-4))*3600
+						,CAST(STR(jh.run_date, 8, 0) AS DATETIME) +CAST(STUFF(STUFF(REPLACE(STR(jh.run_time, 6), ' ', '0'), 3, 0, ':'), 6, 0, ':') AS DATETIME))	
+		&lt; dateadd(dd,cast(@DT as int)+1,'20100101')
+	)
+	OR 
+	( /*Begin date*/
+	CAST(STR(jh.run_date, 8, 0) AS DATETIME) +CAST(STUFF(STUFF(REPLACE(STR(jh.run_time, 6), ' ', '0'), 3, 0, ':'), 6, 0, ':') AS DATETIME)  
+		&gt;= dateadd(dd,cast(@DT as int),'20100101')
+	and 
+	CAST(STR(jh.run_date, 8, 0) AS DATETIME) +CAST(STUFF(STUFF(REPLACE(STR(jh.run_time, 6), ' ', '0'), 3, 0, ':'), 6, 0, ':') AS DATETIME)  
+		&lt;  dateadd(dd,cast(@DT as int)+1,'20100101')
+	)
+
+	OR 
+	(/*Start date*/
+	CAST(STR(jh.run_date, 8, 0) AS DATETIME) +CAST(STUFF(STUFF(REPLACE(STR(jh.run_time, 6), ' ', '0'), 3, 0, ':'), 6, 0, ':') AS DATETIME)  
+		&lt; dateadd(dd,cast(@DT as int),'20100101')
+	AND /*End date*/
+	dateadd(ss
+						,convert(int,right('000000'+convert(varchar(20),jh.run_duration),2))
+							+convert(int,right(left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-2),2))*60
+							+convert(int,left('000000'+convert(varchar(20),jh.run_duration),len('000000'+convert(varchar(20),jh.run_duration))-4))*3600
+						,CAST(STR(jh.run_date, 8, 0) AS DATETIME) +CAST(STUFF(STUFF(REPLACE(STR(jh.run_time, 6), ' ', '0'), 3, 0, ':'), 6, 0, ':') AS DATETIME))
+		&gt;=dateadd(dd,cast(@DT as int)+1,'20100101')
+	)
+	)
+and jh.step_id=0 /*exec status of a whole job*/
+and jh.run_duration&gt;=0  /*negative durations are ignored (possible cause: restart of the server, daylight saving time change)*/
+group by job_id)
+--select * from termin
+
+select 
+ROW_NUMBER() over (order by j.name) [n]
+
+,j.[enabled]
+,j.[description]
+,m.i
+
+,md.Success
+,md.Failed
+, Case When md.avg_ss &gt;= 86400  
+		     Then Convert(VarChar(5), md.avg_ss/86400) + ' days '  Else '' End  + Convert(VarChar(8), DateAdd(Second, md.avg_ss, 0), 108) [Avg Duration]
+, Case When md.max_ss &gt;= 86400  
+		     Then Convert(VarChar(5), md.max_ss/86400) + ' days '  Else '' End  + Convert(VarChar(8), DateAdd(Second, md.max_ss, 0), 108) [Max Duration]
+, Case When md.min_ss &gt;= 86400  
+		     Then Convert(VarChar(5), md.min_ss/86400) + ' days '  Else '' End  + Convert(VarChar(8), DateAdd(Second, md.min_ss, 0), 108) [Min Duration]
+/*,m.job_id*/
+,j.name [name]
+
+,t.from_yesterday
+,t.to_tomorrow
+ 
+,[00:00],[00:30],[01:00],[01:30],[02:00],[02:30],[03:00],[03:30],[04:00],[04:30],[05:00],[05:30],[06:00],[06:30],[07:00],[07:30],[08:00],[08:30],[09:00],[09:30],[10:00],[10:30],[11:00],[11:30],[12:00],[12:30],[13:00],[13:30],[14:00],[14:30],[15:00],[15:30],[16:00],[16:30],[17:00],[17:30],[18:00],[18:30],[19:00],[19:30],[20:00],[20:30],[21:00],[21:30],[22:00],[22:30],[23:00],[23:30]
+,j.job_id
+from @matrix m
+join more_details md on m.job_id=md.job_id
+join termin t on m.job_id=t.job_id
+right join msdb.dbo.sysjobs j on m.job_id=j.job_id
 order by j.name
 
 option (recompile, maxdop 1)</CommandText>
@@ -9356,25 +9639,25 @@ option (recompile)</CommandText>
   + right(cstr(100+datepart(DateInterval.Second,globals!ExecutionTime)),2)</Value>
                       <Style>
                         <FontWeight>Bold</FontWeight>
-                        <Color>Silver</Color>
+                        <Color>DimGray</Color>
                       </Style>
                     </TextRun>
                   </TextRuns>
                   <Style>
-                    <TextAlign>Right</TextAlign>
+                    <TextAlign>Center</TextAlign>
                   </Style>
                 </Paragraph>
               </Paragraphs>
               <Top>0.05209in</Top>
-              <Left>15.88096in</Left>
+              <Left>16.83203in</Left>
               <Height>0.25in</Height>
-              <Width>2.90625in</Width>
+              <Width>3.54923in</Width>
               <ZIndex>2</ZIndex>
               <Style>
                 <Border>
                   <Style>None</Style>
                 </Border>
-                <BackgroundColor>Gray</BackgroundColor>
+                <BackgroundColor>LightGrey</BackgroundColor>
                 <PaddingLeft>2pt</PaddingLeft>
                 <PaddingRight>2pt</PaddingRight>
                 <PaddingTop>2pt</PaddingTop>
@@ -9391,25 +9674,25 @@ option (recompile)</CommandText>
                       <Value>="Page " &amp; Globals!PageNumber &amp; " of " &amp; Globals!TotalPages</Value>
                       <Style>
                         <FontWeight>Bold</FontWeight>
-                        <Color>Silver</Color>
+                        <Color>DimGray</Color>
                       </Style>
                     </TextRun>
                   </TextRuns>
                   <Style>
-                    <TextAlign>Right</TextAlign>
+                    <TextAlign>Center</TextAlign>
                   </Style>
                 </Paragraph>
               </Paragraphs>
               <Top>0.31597in</Top>
-              <Left>15.88096in</Left>
+              <Left>16.83203in</Left>
               <Height>0.25in</Height>
-              <Width>2.90625in</Width>
+              <Width>3.54923in</Width>
               <ZIndex>3</ZIndex>
               <Style>
                 <Border>
                   <Style>None</Style>
                 </Border>
-                <BackgroundColor>Gray</BackgroundColor>
+                <BackgroundColor>LightGrey</BackgroundColor>
                 <PaddingLeft>2pt</PaddingLeft>
                 <PaddingRight>2pt</PaddingRight>
                 <PaddingTop>2pt</PaddingTop>
@@ -9515,36 +9798,6 @@ option (recompile)</CommandText>
                 </Border>
               </Style>
             </Image>
-            <Textbox Name="Textbox35">
-              <CanGrow>true</CanGrow>
-              <KeepTogether>true</KeepTogether>
-              <Paragraphs>
-                <Paragraph>
-                  <TextRuns>
-                    <TextRun>
-                      <Value>=Globals!ExecutionTime</Value>
-                      <Style />
-                    </TextRun>
-                  </TextRuns>
-                  <Style />
-                </Paragraph>
-              </Paragraphs>
-              <rd:DefaultName>Textbox35</rd:DefaultName>
-              <Top>0.65828cm</Top>
-              <Left>48.17745cm</Left>
-              <Height>0.6cm</Height>
-              <Width>3.24083cm</Width>
-              <ZIndex>7</ZIndex>
-              <Style>
-                <Border>
-                  <Style>None</Style>
-                </Border>
-                <PaddingLeft>2pt</PaddingLeft>
-                <PaddingRight>2pt</PaddingRight>
-                <PaddingTop>2pt</PaddingTop>
-                <PaddingBottom>2pt</PaddingBottom>
-              </Style>
-            </Textbox>
           </ReportItems>
           <Style>
             <Border>
